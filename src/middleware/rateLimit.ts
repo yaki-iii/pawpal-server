@@ -1,13 +1,15 @@
 import rateLimit from 'express-rate-limit';
 import { config } from '../config';
 
+const isDev = config.nodeEnv === 'development' || config.nodeEnv === 'dev';
+
 /**
  * Rate limiter for AI consultation endpoints.
- * Limits each user to 20 requests per hour.
+ * In dev mode, allows 1000 req/hour for testing.
  */
 export const aiRateLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: config.rateLimit.aiPerHour,
+  windowMs: 60 * 60 * 1000,
+  max: isDev ? 1000 : config.rateLimit.aiPerHour,
   keyGenerator: (req) => req.userId || req.ip || 'unknown',
   handler: (_req, res) => {
     res.status(429).json({
@@ -22,11 +24,11 @@ export const aiRateLimiter = rateLimit({
 
 /**
  * Rate limiter for authentication endpoints (register/login).
- * Limits each IP to 10 requests per 15 minutes.
+ * In dev mode, allows 1000 req/15min for testing.
  */
 export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: config.rateLimit.authPer15Min,
+  windowMs: 15 * 60 * 1000,
+  max: isDev ? 1000 : config.rateLimit.authPer15Min,
   keyGenerator: (req) => req.ip || 'unknown',
   handler: (_req, res) => {
     res.status(429).json({
@@ -40,11 +42,11 @@ export const authRateLimiter = rateLimit({
 });
 
 /**
- * General API rate limiter — 100 requests per minute per IP.
+ * General API rate limiter — 1000 req/min in dev, 100 in production.
  */
 export const generalRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 100,
+  windowMs: 60 * 1000,
+  max: isDev ? 1000 : 100,
   keyGenerator: (req) => req.ip || 'unknown',
   handler: (_req, res) => {
     res.status(429).json({
