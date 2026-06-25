@@ -45,4 +45,4 @@ services:
       - key: AI_RATE_LIMIT_PER_HOUR
         value: '20'
       - key: AUTH_RATE_LIMIT_PER_15MIN
-        value: '10'
+        value: '100'
