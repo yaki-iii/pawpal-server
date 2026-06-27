@@ -110,13 +110,18 @@ export class MomentService {
     userId: string,
     cursor?: string,
     limit: number = 20,
+    followingOnly: boolean = false,
   ): Promise<PaginatedResult<MomentDTO>> {
-    // Get the user's pets + followed users' pets
     const following = await prisma.follow.findMany({
       where: { followerId: userId },
       select: { followeeId: true },
     });
-    const ownerIds = [userId, ...following.map((f) => f.followeeId)];
+    const followedIds = following.map((f) => f.followeeId);
+    const ownerIds = followingOnly ? followedIds : [userId, ...followedIds];
+
+    if (ownerIds.length === 0) {
+      return { items: [], nextCursor: null };
+    }
 
     const pets = await prisma.pet.findMany({
       where: { userId: { in: ownerIds } },

@@ -83,11 +83,12 @@ export class MomentController {
         sendError(res, 401, '未授权');
         return;
       }
-      const { cursor, limit = '20' } = req.query;
+      const { cursor, limit = '20', followingOnly } = req.query;
       const result = await MomentService.getFeed(
         req.userId,
         cursor as string | undefined,
         parseInt(limit as string, 10),
+        followingOnly === 'true',
       );
       sendSuccess(res, result);
     } catch (error) {

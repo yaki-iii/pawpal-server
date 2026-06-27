@@ -40,17 +40,24 @@ export function createApp(): Application {
 
   // Health check endpoint
   app.get('/api/v1/health', async (_req, res) => {
+    let databaseReachable = false;
     let momentsVideos = false;
     try {
-      const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
-        SELECT EXISTS (
-          SELECT 1
-          FROM information_schema.columns
-          WHERE table_schema = 'public'
-            AND table_name = 'moments'
-            AND column_name = 'videos'
-        ) AS "exists"
-      `;
+      const rows = await Promise.race([
+        prisma.$queryRaw<Array<{ exists: boolean }>>`
+          SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'moments'
+              AND column_name = 'videos'
+          ) AS "exists"
+        `,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('database health check timed out')), 1500);
+        }),
+      ]);
+      databaseReachable = true;
       momentsVideos = rows[0]?.exists ?? false;
     } catch (error) {
       logger.warn(`Health schema check failed: ${(error as Error).message}`);
@@ -61,6 +68,7 @@ export function createApp(): Application {
       data: {
         status: 'ok',
         buildId: BUILD_ID,
+        database: { reachable: databaseReachable },
         schema: { momentsVideos },
         timestamp: new Date().toISOString(),
       },

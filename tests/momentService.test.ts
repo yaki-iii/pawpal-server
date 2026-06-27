@@ -280,6 +280,26 @@ describe('MomentService', () => {
       expect(where.petId).toEqual({ in: ['pet-1', 'pet-2'] });
     });
 
+    it('should include only followed users pets when followingOnly is true', async () => {
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([
+        { followeeId: 'user-2' },
+      ]);
+      (prisma.pet.findMany as jest.Mock).mockResolvedValue([
+        { id: 'pet-2' },
+      ]);
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([mockMoment]);
+      (prisma.momentLike.findMany as jest.Mock).mockResolvedValue([]);
+
+      await MomentService.getFeed('user-1', undefined, 10, true);
+
+      expect(prisma.pet.findMany).toHaveBeenCalledWith({
+        where: { userId: { in: ['user-2'] } },
+        select: { id: true },
+      });
+      const where = (prisma.moment.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.petId).toEqual({ in: ['pet-2'] });
+    });
+
     it('should return empty when user has no pets and follows no one with pets', async () => {
       (prisma.follow.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.pet.findMany as jest.Mock).mockResolvedValue([]);
