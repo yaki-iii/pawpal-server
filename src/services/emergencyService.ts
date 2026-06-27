@@ -10,6 +10,8 @@ interface AMapPoi {
   id?: string;
   name?: string;
   address?: string;
+  cityname?: string | string[];
+  adname?: string | string[];
   location?: string;
   tel?: string;
   distance?: string | number;
@@ -349,6 +351,7 @@ export class EmergencyHelpService {
       id: `amap-${poi.id}`,
       name: poi.name,
       address: poi.address || '',
+      city: EmergencyHelpService.formatAMapCity(poi),
       phone: poi.tel || '',
       lat,
       lng,
@@ -372,6 +375,18 @@ export class EmergencyHelpService {
     if (typeof value !== 'string') return undefined;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private static formatAMapCity(poi: AMapPoi): string | undefined {
+    const city = EmergencyHelpService.firstAMapText(poi.cityname);
+    const district = EmergencyHelpService.firstAMapText(poi.adname);
+    return [city, district].filter(Boolean).join(' ') || undefined;
+  }
+
+  private static firstAMapText(value?: string | string[]): string | undefined {
+    const text = Array.isArray(value) ? value[0] : value;
+    const trimmed = text?.trim();
+    return trimmed || undefined;
   }
 
   private static isLikely24HourVet(poi: AMapPoi): boolean {

@@ -243,6 +243,8 @@ describe('EmergencyHelpService', () => {
               id: 'B001',
               name: '24小时宠物医院',
               address: '上海市黄浦区测试路1号',
+              cityname: '上海市',
+              adname: '黄浦区',
               location: '121.4737,31.2304',
               tel: '021-12345678',
               distance: '450',
@@ -259,6 +261,7 @@ describe('EmergencyHelpService', () => {
         expect.objectContaining({
           id: 'amap-B001',
           name: '24小时宠物医院',
+          city: '上海市 黄浦区',
           phone: '021-12345678',
           lat: 31.2304,
           lng: 121.4737,
