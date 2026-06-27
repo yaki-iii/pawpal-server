@@ -1,9 +1,30 @@
 import { prisma } from '../config/database';
+import { config } from '../config';
 import { logger } from '../utils/logger';
 import type { EmergencyHelp, VetClinic } from '@prisma/client';
 import type { EmergencyHelpDTO, VetClinicDTO } from '../types';
 import { AuthService } from './authService';
 import { NotificationService } from './notificationService';
+
+interface AMapPoi {
+  id?: string;
+  name?: string;
+  address?: string;
+  location?: string;
+  tel?: string;
+  distance?: string | number;
+  biz_ext?: {
+    rating?: string | number;
+  };
+  type?: string;
+  tag?: string;
+}
+
+interface AMapAroundResponse {
+  status?: string;
+  info?: string;
+  pois?: AMapPoi[];
+}
 
 /**
  * EmergencyHelpService — emergency help requests for pet owners.
@@ -144,6 +165,62 @@ export class EmergencyHelpService {
     lng: number,
     limit: number = 10,
   ): Promise<VetClinicDTO[]> {
+    const amapVets = await EmergencyHelpService.listNearbyVetsFromAMap(lat, lng, limit);
+    if (amapVets.length > 0) {
+      return amapVets;
+    }
+
+    return EmergencyHelpService.listNearbyVetsFromDB(lat, lng, limit);
+  }
+
+  private static async listNearbyVetsFromAMap(
+    lat: number,
+    lng: number,
+    limit: number,
+  ): Promise<VetClinicDTO[]> {
+    if (!config.amap.webServiceKey) {
+      return [];
+    }
+
+    try {
+      const params = new URLSearchParams({
+        key: config.amap.webServiceKey,
+        location: `${lng},${lat}`,
+        keywords: '宠物医院',
+        radius: '10000',
+        sortrule: 'distance',
+        offset: String(Math.min(Math.max(limit, 1), 25)),
+        page: '1',
+        extensions: 'all',
+      });
+
+      const response = await fetch(`${config.amap.placeAroundUrl}?${params.toString()}`);
+      if (!response.ok) {
+        logger.warn(`AMap vet search failed: HTTP ${response.status}`);
+        return [];
+      }
+
+      const data = (await response.json()) as AMapAroundResponse;
+      if (data.status !== '1') {
+        logger.warn(`AMap vet search failed: ${data.info || 'unknown error'}`);
+        return [];
+      }
+
+      return (data.pois || [])
+        .map((poi) => EmergencyHelpService.toAMapVetDTO(poi))
+        .filter((vet): vet is VetClinicDTO => vet !== null)
+        .slice(0, limit);
+    } catch (error) {
+      logger.warn(`AMap vet search unavailable: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  private static async listNearbyVetsFromDB(
+    lat: number,
+    lng: number,
+    limit: number,
+  ): Promise<VetClinicDTO[]> {
     // Fetch candidates within a rough bounding box first (for DB-side filtering).
     // 1 degree ≈ 111 km, so a 50km radius ≈ 0.45 degree.
     const clinics = await prisma.vetClinic.findMany({
@@ -246,6 +323,7 @@ export class EmergencyHelpService {
   }
 
   static toVetDTO(clinic: VetClinic & { distance?: number }): VetClinicDTO {
+    const distance = (clinic as { distance?: number }).distance;
     return {
       id: clinic.id,
       name: clinic.name,
@@ -255,7 +333,49 @@ export class EmergencyHelpService {
       lng: clinic.lng,
       is24Hour: clinic.is24Hour,
       rating: clinic.rating,
-      distance: (clinic as { distance?: number }).distance,
+      distance,
+      distanceMeters: typeof distance === 'number' ? Math.round(distance * 1000) : undefined,
     };
+  }
+
+  private static toAMapVetDTO(poi: AMapPoi): VetClinicDTO | null {
+    const [lng, lat] = EmergencyHelpService.parseAMapLocation(poi.location);
+    if (!poi.id || !poi.name || lat == null || lng == null) {
+      return null;
+    }
+
+    const distanceMeters = EmergencyHelpService.parseNumber(poi.distance);
+    return {
+      id: `amap-${poi.id}`,
+      name: poi.name,
+      address: poi.address || '',
+      phone: poi.tel || '',
+      lat,
+      lng,
+      is24Hour: EmergencyHelpService.isLikely24HourVet(poi),
+      rating: EmergencyHelpService.parseNumber(poi.biz_ext?.rating) ?? 0,
+      distance: distanceMeters != null ? distanceMeters / 1000 : undefined,
+      distanceMeters,
+    };
+  }
+
+  private static parseAMapLocation(location?: string): [number | null, number | null] {
+    if (!location) return [null, null];
+    const [lngRaw, latRaw] = location.split(',');
+    const lng = EmergencyHelpService.parseNumber(lngRaw);
+    const lat = EmergencyHelpService.parseNumber(latRaw);
+    return [lng ?? null, lat ?? null];
+  }
+
+  private static parseNumber(value?: string | number): number | undefined {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+    if (typeof value !== 'string') return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private static isLikely24HourVet(poi: AMapPoi): boolean {
+    const text = [poi.name, poi.type, poi.tag].filter(Boolean).join(' ');
+    return /24\s*(小时|h|H)|全天|夜间急诊/.test(text);
   }
 }

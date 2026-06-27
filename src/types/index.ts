@@ -190,6 +190,7 @@ export interface VetClinicDTO {
   is24Hour: boolean;
   rating: number;
   distance?: number;
+  distanceMeters?: number;
 }
 
 export interface CircleMemberDTO {

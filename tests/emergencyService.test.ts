@@ -24,6 +24,7 @@ jest.mock('../src/config/database', () => ({
 jest.mock('../src/config', () => ({
   config: {
     encryption: { key: 'test-encryption-key-32bytes-ok!!!' },
+    amap: { webServiceKey: 'test-amap-key' },
   },
 }));
 
@@ -77,6 +78,7 @@ const mockHelp = {
 describe('EmergencyHelpService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    global.fetch = jest.fn();
   });
 
   describe('createHelp', () => {
@@ -231,6 +233,64 @@ describe('EmergencyHelpService', () => {
   });
 
   describe('listNearbyVets', () => {
+    it('should return normalized AMap vets when AMap search succeeds', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          pois: [
+            {
+              id: 'B001',
+              name: '24小时宠物医院',
+              address: '上海市黄浦区测试路1号',
+              location: '121.4737,31.2304',
+              tel: '021-12345678',
+              distance: '450',
+              biz_ext: { rating: '4.8' },
+            },
+          ],
+        }),
+      });
+
+      const result = await EmergencyHelpService.listNearbyVets(31.2304, 121.4737, 10);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'amap-B001',
+          name: '24小时宠物医院',
+          phone: '021-12345678',
+          lat: 31.2304,
+          lng: 121.4737,
+          is24Hour: true,
+          rating: 4.8,
+          distance: 0.45,
+        }),
+      );
+      expect(prisma.vetClinic.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to local DB vets when AMap search fails', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('amap unavailable'));
+      (prisma.vetClinic.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'vet-local',
+          name: '本地兽医',
+          address: 'addr',
+          phone: '110',
+          lat: 31.23,
+          lng: 121.47,
+          is24Hour: false,
+          rating: 4.0,
+        },
+      ]);
+
+      const result = await EmergencyHelpService.listNearbyVets(31.2304, 121.4737, 10);
+
+      expect(result[0].id).toBe('vet-local');
+      expect(prisma.vetClinic.findMany).toHaveBeenCalled();
+    });
+
     it('should return vets sorted by distance', async () => {
       // Two clinics: one 1km away, one 5km away
       (prisma.vetClinic.findMany as jest.Mock).mockResolvedValue([
