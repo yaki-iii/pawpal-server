@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "prisma generate && tsup src/index.ts --format cjs --out-dir dist --clean",
-    "start": "prisma migrate deploy && node dist/index.js",
+    "start": "node dist/index.js",
     "seed": "ts-node --transpile-only scripts/seed.ts",
     "migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",

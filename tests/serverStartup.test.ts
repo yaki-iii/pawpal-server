@@ -48,4 +48,10 @@ describe('server startup', () => {
 
     resolveMigrations();
   });
+
+  it('starts the web process without blocking on prisma migrate deploy', () => {
+    const packageJson = require('../package.json') as { scripts: { start: string } };
+
+    expect(packageJson.scripts.start).toBe('node dist/index.js');
+  });
 });
