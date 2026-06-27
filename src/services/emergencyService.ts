@@ -2,7 +2,7 @@ import { prisma } from '../config/database';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import type { EmergencyHelp, VetClinic } from '@prisma/client';
-import type { EmergencyHelpDTO, VetClinicDTO } from '../types';
+import type { EmergencyHelpDTO, ManualLocationDTO, VetClinicDTO } from '../types';
 import { AuthService } from './authService';
 import { NotificationService } from './notificationService';
 
@@ -29,6 +29,20 @@ interface AMapAroundResponse {
   status?: string;
   info?: string;
   pois?: AMapPoi[];
+}
+
+interface AMapGeocode {
+  formatted_address?: string;
+  province?: string;
+  city?: string | string[];
+  district?: string | string[];
+  location?: string;
+}
+
+interface AMapGeocodeResponse {
+  status?: string;
+  info?: string;
+  geocodes?: AMapGeocode[];
 }
 
 /**
@@ -176,6 +190,57 @@ export class EmergencyHelpService {
     }
 
     return EmergencyHelpService.listNearbyVetsFromDB(lat, lng, limit);
+  }
+
+  static async geocodeManualLocation(city: string, address: string): Promise<ManualLocationDTO> {
+    const cleanCity = city.trim();
+    const cleanAddress = address.trim();
+    if (!cleanCity || !cleanAddress) {
+      throw new Error('请填写城市和具体位置');
+    }
+    if (!config.amap.webServiceKey) {
+      throw new Error('位置搜索服务暂不可用');
+    }
+
+    const params = new URLSearchParams({
+      key: config.amap.webServiceKey,
+      city: cleanCity,
+      address: cleanAddress,
+    });
+
+    try {
+      const response = await fetch(`${config.amap.geocodeUrl}?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as AMapGeocodeResponse;
+      if (data.status !== '1') {
+        logger.warn(`AMap geocode failed: ${data.info || 'unknown error'}`);
+        throw new Error('位置搜索失败，请稍后再试');
+      }
+
+      const geocode = data.geocodes?.[0];
+      const [longitude, latitude] = EmergencyHelpService.parseAMapLocation(geocode?.location);
+      if (!geocode || latitude == null || longitude == null) {
+        throw new Error('未找到该位置，请补充更具体的地址');
+      }
+
+      return {
+        latitude,
+        longitude,
+        displayName: geocode.formatted_address || `${cleanCity}${cleanAddress}`,
+        city: EmergencyHelpService.firstAMapText(geocode.city) || cleanCity,
+        district: EmergencyHelpService.firstAMapText(geocode.district),
+      };
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message.includes('未找到') || message.includes('请填写') || message.includes('暂不可用')) {
+        throw error;
+      }
+      logger.warn(`AMap geocode unavailable: ${message}`);
+      throw new Error('位置搜索失败，请稍后再试');
+    }
   }
 
   private static async listNearbyVetsFromAMap(

@@ -60,6 +60,28 @@ export class EmergencyController {
   }
 
   /**
+   * GET /emergency/geocode — resolve a user-entered city/address to coordinates
+   */
+  static async geocode(req: Request, res: Response): Promise<void> {
+    try {
+      const city = String(req.query.city || '').trim();
+      const address = String(req.query.address || '').trim();
+
+      if (!city || !address) {
+        sendError(res, 400, '请填写城市和具体位置');
+        return;
+      }
+
+      const location = await EmergencyHelpService.geocodeManualLocation(city, address);
+      sendSuccess(res, location);
+    } catch (error) {
+      const message = (error as Error).message;
+      const statusCode = message.includes('未找到') || message.includes('请填写') ? 400 : 500;
+      sendError(res, statusCode, message);
+    }
+  }
+
+  /**
    * POST /emergency/:id/respond — respond to an emergency
    */
   static async respond(req: Request, res: Response): Promise<void> {

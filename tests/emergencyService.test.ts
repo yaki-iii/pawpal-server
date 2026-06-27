@@ -24,7 +24,10 @@ jest.mock('../src/config/database', () => ({
 jest.mock('../src/config', () => ({
   config: {
     encryption: { key: 'test-encryption-key-32bytes-ok!!!' },
-    amap: { webServiceKey: 'test-amap-key' },
+    amap: {
+      webServiceKey: 'test-amap-key',
+      geocodeUrl: 'https://restapi.amap.com/v3/geocode/geo',
+    },
   },
 }));
 
@@ -233,6 +236,52 @@ describe('EmergencyHelpService', () => {
   });
 
   describe('listNearbyVets', () => {
+    it('should geocode a manual city and address with AMap', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          geocodes: [
+            {
+              formatted_address: '广东省佛山市顺德区北滘镇',
+              province: '广东省',
+              city: '佛山市',
+              district: '顺德区',
+              location: '113.217200,22.932600',
+            },
+          ],
+        }),
+      });
+
+      const result = await EmergencyHelpService.geocodeManualLocation('佛山', '顺德区北滘镇');
+
+      expect(result).toEqual({
+        latitude: 22.9326,
+        longitude: 113.2172,
+        displayName: '广东省佛山市顺德区北滘镇',
+        city: '佛山市',
+        district: '顺德区',
+      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('address=%E9%A1%BA%E5%BE%B7%E5%8C%BA%E5%8C%97%E6%BB%98%E9%95%87'),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('city=%E4%BD%9B%E5%B1%B1'));
+    });
+
+    it('should throw when manual location cannot be geocoded', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          geocodes: [],
+        }),
+      });
+
+      await expect(
+        EmergencyHelpService.geocodeManualLocation('未知城市', '未知位置'),
+      ).rejects.toThrow('未找到该位置');
+    });
+
     it('should return normalized AMap vets when AMap search succeeds', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,

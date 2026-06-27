@@ -25,6 +25,7 @@ router.use(requireAuth);
 
 // Specific routes — must come BEFORE /:id
 router.post('/help', validateBody(createHelpSchema), EmergencyController.createHelp);
+router.get('/geocode', EmergencyController.geocode);
 router.get('/vets', EmergencyController.listVets);
 router.get('/active', EmergencyController.listActive);
 

@@ -221,6 +221,14 @@ export interface VetClinicDTO {
   openStatus?: string;
 }
 
+export interface ManualLocationDTO {
+  latitude: number;
+  longitude: number;
+  displayName: string;
+  city?: string;
+  district?: string;
+}
+
 export interface CircleMemberDTO {
   id: string;
   circleId: string;

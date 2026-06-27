@@ -45,6 +45,7 @@ export const config = {
   amap: {
     webServiceKey: process.env.AMAP_WEB_SERVICE_KEY || '',
     placeAroundUrl: process.env.AMAP_PLACE_AROUND_URL || 'https://restapi.amap.com/v3/place/around',
+    geocodeUrl: process.env.AMAP_GEOCODE_URL || 'https://restapi.amap.com/v3/geocode/geo',
   },
 
   encryption: {
