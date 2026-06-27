@@ -2,13 +2,20 @@ import { Router } from 'express';
 import { MomentController } from '../controllers/momentController';
 import { requireAuth, optionalAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
+import { uploadMomentMedia } from '../middleware/upload';
 import { z } from 'zod';
 
 const createMomentSchema = z.object({
-  content: z.string().min(1, '请输入内容').max(500, '内容最多500字'),
-  images: z.array(z.string()).max(9, '最多9张图片').default([]),
+  content: z.string().max(500, '内容最多500字').default(''),
+  images: z.union([z.array(z.string()), z.string()]).optional(),
+  videos: z.union([z.array(z.string()), z.string()]).optional(),
   mood: z.string().max(20, '心情最多20字').optional(),
   location: z.string().max(50, '位置最多50字').optional(),
+});
+
+const createMomentCommentSchema = z.object({
+  content: z.string().trim().min(1, '评论不能为空').max(500, '评论最多500字'),
+  parentId: z.string().optional(),
 });
 
 /**
@@ -28,7 +35,13 @@ export const petMomentRoutes = Router();
 petMomentRoutes.get('/:petId/moments', optionalAuth, MomentController.listMoments);
 
 // POST /pets/:petId/moments — auth required
-petMomentRoutes.post('/:petId/moments', requireAuth, validateBody(createMomentSchema), MomentController.createMoment);
+petMomentRoutes.post(
+  '/:petId/moments',
+  requireAuth,
+  uploadMomentMedia,
+  validateBody(createMomentSchema),
+  MomentController.createMoment,
+);
 
 /** Mounted at /moments — single-moment operations. */
 export const momentRoutes = Router();
@@ -38,6 +51,23 @@ momentRoutes.delete('/:id', requireAuth, MomentController.deleteMoment);
 
 // POST /moments/:id/like — auth required
 momentRoutes.post('/:id/like', requireAuth, MomentController.toggleLike);
+
+// POST /moments/:id/share — records external share taps
+momentRoutes.post('/:id/share', optionalAuth, MomentController.recordShare);
+
+// POST /moments/:id/promote-to-diary — auth required (owner only)
+momentRoutes.post('/:id/promote-to-diary', requireAuth, MomentController.promoteToDiary);
+
+// GET /moments/:id/comments — public comments
+momentRoutes.get('/:id/comments', optionalAuth, MomentController.listComments);
+
+// POST /moments/:id/comments — auth required
+momentRoutes.post(
+  '/:id/comments',
+  requireAuth,
+  validateBody(createMomentCommentSchema),
+  MomentController.createComment,
+);
 
 /** Mounted at /feed — feed endpoints. */
 export const momentFeedRoutes = Router();

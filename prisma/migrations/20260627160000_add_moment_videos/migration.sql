@@ -1,0 +1,1 @@
+ALTER TABLE "moments" ADD COLUMN "videos" TEXT[] DEFAULT ARRAY[]::TEXT[];

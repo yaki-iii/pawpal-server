@@ -15,11 +15,18 @@ jest.mock('../src/config/database', () => ({
       delete: jest.fn(),
       update: jest.fn(),
     },
+    growthDiaryEntry: {
+      create: jest.fn(),
+    },
     momentLike: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
       delete: jest.fn(),
+    },
+    momentComment: {
+      create: jest.fn(),
+      findMany: jest.fn(),
     },
     follow: {
       findMany: jest.fn(),
@@ -89,9 +96,11 @@ const mockMoment = {
   petId: 'pet-1',
   content: '煤球今天又拆家了',
   images: ['/uploads/1.jpg'],
+  videos: [],
   mood: '无奈',
   location: '杭州',
   likeCount: 3,
+  shareCount: 0,
   createdAt: new Date('2026-06-01'),
   updatedAt: new Date('2026-06-01'),
 };
@@ -170,6 +179,26 @@ describe('MomentService', () => {
       expect(createData.images).toEqual([]);
       expect(createData.mood).toBe('');
       expect(createData.location).toBe('');
+    });
+
+    it('should create a moment with videos', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.moment.create as jest.Mock).mockResolvedValue({
+        ...mockMoment,
+        images: [],
+        videos: ['/uploads/video.mp4'],
+        user: mockUser,
+        pet: mockPet,
+      });
+
+      const moment = await MomentService.createMoment('user-1', 'pet-1', {
+        content: '煤球跑步视频',
+        videos: ['/uploads/video.mp4'],
+      });
+
+      expect(moment.videos).toEqual(['/uploads/video.mp4']);
+      const createData = (prisma.moment.create as jest.Mock).mock.calls[0][0].data;
+      expect(createData.videos).toEqual(['/uploads/video.mp4']);
     });
   });
 
@@ -290,6 +319,134 @@ describe('MomentService', () => {
     });
   });
 
+  describe('promoteToDiary', () => {
+    it('should create a growth diary entry from an owned moment', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue({
+        ...mockMoment,
+        videos: ['/uploads/run.mp4'],
+      });
+      (prisma.growthDiaryEntry.create as jest.Mock).mockResolvedValue({
+        id: 'entry-1',
+        petId: 'pet-1',
+        userId: 'user-1',
+        title: '煤球今天又拆家了',
+        content: '煤球今天又拆家了',
+        mood: '无奈',
+        photos: ['/uploads/1.jpg'],
+        videos: ['/uploads/run.mp4'],
+        createdAt: new Date('2026-06-02T00:00:00Z'),
+      });
+
+      const entry = await MomentService.promoteToDiary('moment-1', 'user-1');
+
+      expect(entry.id).toBe('entry-1');
+      expect(entry.photos).toEqual(['/uploads/1.jpg']);
+      expect(entry.videos).toEqual(['/uploads/run.mp4']);
+      expect(prisma.growthDiaryEntry.create).toHaveBeenCalledWith({
+        data: {
+          petId: 'pet-1',
+          userId: 'user-1',
+          title: '煤球今天又拆家了',
+          content: '煤球今天又拆家了',
+          mood: '无奈',
+          photos: ['/uploads/1.jpg'],
+          videos: ['/uploads/run.mp4'],
+        },
+      });
+    });
+
+    it('should throw if the user does not own the moment', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue({
+        ...mockMoment,
+        userId: 'other-user',
+      });
+
+      await expect(MomentService.promoteToDiary('moment-1', 'user-1')).rejects.toThrow(
+        '无权升级该碎片',
+      );
+    });
+  });
+
+  describe('comments', () => {
+    it('should list comments for a moment with author info', async () => {
+      (prisma.momentComment.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'comment-1',
+          momentId: 'moment-1',
+          userId: 'user-2',
+          parentId: null,
+          content: '好可爱',
+          createdAt: new Date('2026-06-03T00:00:00Z'),
+          author: { ...mockUser, id: 'user-2', nickname: '糖糖' },
+          replies: [
+            {
+              id: 'reply-1',
+              momentId: 'moment-1',
+              userId: 'user-1',
+              parentId: 'comment-1',
+              content: '谢谢',
+              createdAt: new Date('2026-06-03T00:10:00Z'),
+              author: mockUser,
+            },
+          ],
+        },
+      ]);
+
+      const comments = await MomentService.listComments('moment-1');
+
+      expect(comments).toHaveLength(1);
+      expect(comments[0].author?.nickname).toBe('糖糖');
+      expect(comments[0].replies).toHaveLength(1);
+      expect(prisma.momentComment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { momentId: 'moment-1', parentId: null },
+          orderBy: { createdAt: 'desc' },
+        }),
+      );
+    });
+
+    it('should create a comment and increment moment comment count', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(mockMoment);
+      (prisma.momentComment.create as jest.Mock).mockResolvedValue({
+        id: 'comment-1',
+        momentId: 'moment-1',
+        userId: 'user-2',
+        parentId: null,
+        content: '好可爱',
+        createdAt: new Date('2026-06-03T00:00:00Z'),
+        author: { ...mockUser, id: 'user-2', nickname: '糖糖' },
+      });
+      (prisma.moment.update as jest.Mock).mockResolvedValue({});
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ ...mockUser, id: 'user-2', nickname: '糖糖' });
+
+      const comment = await MomentService.createComment('moment-1', 'user-2', '好可爱');
+
+      expect(comment.content).toBe('好可爱');
+      expect(comment.author?.nickname).toBe('糖糖');
+      expect(prisma.momentComment.create).toHaveBeenCalledWith({
+        data: {
+          momentId: 'moment-1',
+          userId: 'user-2',
+          parentId: null,
+          content: '好可爱',
+        },
+        include: { author: true },
+      });
+      expect(prisma.moment.update).toHaveBeenCalledWith({
+        where: { id: 'moment-1' },
+        data: { commentCount: { increment: 1 } },
+      });
+    });
+
+    it('should throw when commenting on a missing moment', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        MomentService.createComment('missing-moment', 'user-1', '好可爱'),
+      ).rejects.toThrow('碎片不存在');
+    });
+  });
+
   describe('toggleLike', () => {
     it('should like a moment (create like + increment count)', async () => {
       (prisma.moment.findUnique as jest.Mock).mockResolvedValue(mockMoment);
@@ -334,6 +491,32 @@ describe('MomentService', () => {
       (prisma.moment.findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(MomentService.toggleLike('nonexistent', 'user-1')).rejects.toThrow(
+        '碎片不存在',
+      );
+    });
+  });
+
+  describe('recordShare', () => {
+    it('should increment and return the moment share count', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(mockMoment);
+      (prisma.moment.update as jest.Mock).mockResolvedValue({
+        ...mockMoment,
+        shareCount: 1,
+      });
+
+      const result = await MomentService.recordShare('moment-1');
+
+      expect(result.shareCount).toBe(1);
+      expect(prisma.moment.update).toHaveBeenCalledWith({
+        where: { id: 'moment-1' },
+        data: { shareCount: { increment: 1 } },
+      });
+    });
+
+    it('should throw error if moment does not exist', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(MomentService.recordShare('nonexistent')).rejects.toThrow(
         '碎片不存在',
       );
     });

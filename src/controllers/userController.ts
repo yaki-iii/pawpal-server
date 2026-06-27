@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { CommunityService } from '../services/communityService';
 import { NotificationService } from '../services/notificationService';
 import { DataPrivacyService } from '../services/dataPrivacyService';
+import { ProfileContentService } from '../services/profileContentService';
 import { prisma } from '../config/database';
 import { sendSuccess, sendError } from '../middleware/error';
 import { logger } from '../utils/logger';
@@ -31,10 +32,10 @@ export class UserController {
         sendError(res, 401, '未授权');
         return;
       }
-      const { nickname, avatar, bio, city } = req.body;
+      const { nickname, avatar, avatarUrl, bio, city } = req.body;
       const updateData: Record<string, unknown> = {};
       if (nickname !== undefined) updateData.nickname = nickname;
-      if (avatar !== undefined) updateData.avatar = avatar;
+      if (avatar !== undefined || avatarUrl !== undefined) updateData.avatar = avatar ?? avatarUrl;
       if (bio !== undefined) updateData.bio = bio;
       if (city !== undefined) updateData.city = city;
 
@@ -67,6 +68,46 @@ export class UserController {
         parseInt(limit as string, 10),
       );
       sendSuccess(res, result);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message);
+    }
+  }
+
+  /**
+   * GET /users/:userId/moments — get moments by user
+   */
+  static async getUserMoments(req: Request, res: Response): Promise<void> {
+    try {
+      const { limit = '20' } = req.query;
+      const moments = await ProfileContentService.listUserMoments(
+        req.params.userId,
+        parseInt(limit as string, 10),
+      );
+      sendSuccess(res, moments);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message);
+    }
+  }
+
+  /**
+   * GET /users/:userId/liked-posts — current user's liked posts as favorites MVP
+   */
+  static async getLikedPosts(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) {
+        sendError(res, 401, '未授权');
+        return;
+      }
+      if (req.userId !== req.params.userId) {
+        sendError(res, 403, '无权访问该收藏列表', undefined, 403);
+        return;
+      }
+      const { limit = '20' } = req.query;
+      const posts = await ProfileContentService.listLikedPosts(
+        req.params.userId,
+        parseInt(limit as string, 10),
+      );
+      sendSuccess(res, posts);
     } catch (error) {
       sendError(res, 500, (error as Error).message);
     }

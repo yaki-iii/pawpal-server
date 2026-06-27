@@ -1,7 +1,7 @@
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
-import type { Moment } from '@prisma/client';
-import type { MomentDTO, PaginatedResult } from '../types';
+import type { GrowthDiaryEntry, Moment, MomentComment } from '@prisma/client';
+import type { GrowthDiaryEntryDTO, MomentCommentDTO, MomentDTO, PaginatedResult } from '../types';
 import { AuthService } from './authService';
 import { PetService } from './petService';
 import { NotificationService } from './notificationService';
@@ -26,6 +26,7 @@ export class MomentService {
     data: {
       content: string;
       images?: string[];
+      videos?: string[];
       mood?: string;
       location?: string;
     },
@@ -40,6 +41,7 @@ export class MomentService {
         petId,
         content: data.content,
         images: data.images || [],
+        videos: data.videos || [],
         mood: data.mood || '',
         location: data.location || '',
       },
@@ -176,6 +178,89 @@ export class MomentService {
   }
 
   /**
+   * Promote a lightweight moment into a formal growth diary entry.
+   */
+  static async promoteToDiary(momentId: string, userId: string): Promise<GrowthDiaryEntryDTO> {
+    const moment = await prisma.moment.findUnique({ where: { id: momentId } });
+    if (!moment) throw new Error('碎片不存在');
+    if (moment.userId !== userId) throw new Error('无权升级该碎片');
+
+    const entry = await prisma.growthDiaryEntry.create({
+      data: {
+        petId: moment.petId,
+        userId: moment.userId,
+        title: MomentService.diaryTitleFor(moment.content),
+        content: moment.content,
+        mood: moment.mood,
+        photos: moment.images,
+        videos: (moment as { videos?: string[] }).videos || [],
+      },
+    });
+
+    logger.info(`Moment promoted to growth diary: ${momentId} -> ${entry.id}`);
+    return MomentService.growthDiaryEntryToDTO(entry);
+  }
+
+  /**
+   * List comments for a moment, with one-level replies for the shared comment UI.
+   */
+  static async listComments(momentId: string): Promise<MomentCommentDTO[]> {
+    const comments = await prisma.momentComment.findMany({
+      where: { momentId, parentId: null },
+      include: {
+        author: true,
+        replies: {
+          include: { author: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return comments.map((comment) => MomentService.toCommentDTO(comment));
+  }
+
+  /**
+   * Create a top-level comment or reply for a moment.
+   */
+  static async createComment(
+    momentId: string,
+    userId: string,
+    content: string,
+    parentId?: string,
+  ): Promise<MomentCommentDTO> {
+    const moment = await prisma.moment.findUnique({ where: { id: momentId } });
+    if (!moment) throw new Error('碎片不存在');
+
+    const comment = await prisma.momentComment.create({
+      data: {
+        momentId,
+        userId,
+        parentId: parentId || null,
+        content,
+      },
+      include: { author: true },
+    });
+
+    await prisma.moment.update({
+      where: { id: momentId },
+      data: { commentCount: { increment: 1 } },
+    });
+
+    if (moment.userId !== userId) {
+      const author = await prisma.user.findUnique({ where: { id: userId } });
+      await NotificationService.create({
+        userId: moment.userId,
+        type: 'COMMENT',
+        content: `${author?.nickname || '有人'}评论了你的日常碎片`,
+        linkUrl: `/moments/${momentId}`,
+      });
+    }
+
+    return MomentService.toCommentDTO(comment);
+  }
+
+  /**
    * Toggle like on a moment. Notifies the moment author.
    */
   static async toggleLike(momentId: string, userId: string): Promise<{ liked: boolean }> {
@@ -214,6 +299,23 @@ export class MomentService {
     return { liked: true };
   }
 
+  /**
+   * Record that a moment was shared through an external share sheet.
+   */
+  static async recordShare(momentId: string): Promise<{ shareCount: number }> {
+    const moment = await prisma.moment.findUnique({ where: { id: momentId } });
+    if (!moment) throw new Error('碎片不存在');
+
+    const updated = await prisma.moment.update({
+      where: { id: momentId },
+      data: { shareCount: { increment: 1 } },
+    });
+
+    return {
+      shareCount: (updated as { shareCount?: number }).shareCount || 0,
+    };
+  }
+
   // ---- DTO Converter ----
 
   static toDTO(moment: Moment): MomentDTO {
@@ -223,11 +325,53 @@ export class MomentService {
       petId: moment.petId,
       content: moment.content,
       images: moment.images,
+      videos: (moment as { videos?: string[] }).videos || [],
       mood: moment.mood,
       location: moment.location,
       likeCount: moment.likeCount,
+      commentCount: (moment as { commentCount?: number }).commentCount || 0,
+      shareCount: (moment as { shareCount?: number }).shareCount || 0,
       createdAt: moment.createdAt.toISOString(),
       updatedAt: moment.updatedAt.toISOString(),
+    };
+  }
+
+  private static diaryTitleFor(content: string): string {
+    const title = content.trim();
+    return title.length > 0 ? title.slice(0, 18) : '日常碎片';
+  }
+
+  private static growthDiaryEntryToDTO(entry: GrowthDiaryEntry): GrowthDiaryEntryDTO {
+    return {
+      id: entry.id,
+      petId: entry.petId,
+      userId: entry.userId,
+      title: entry.title,
+      content: entry.content,
+      mood: entry.mood,
+      photos: entry.photos,
+      videos: entry.videos,
+      createdAt: entry.createdAt.toISOString(),
+    };
+  }
+
+  private static toCommentDTO(
+    comment: MomentComment
+      & { author?: { id: string; email: string; nickname: string; avatar: string; bio: string; city: string; membershipLevel: string; createdAt: Date; updatedAt: Date } }
+      & { replies?: unknown[] },
+  ): MomentCommentDTO {
+    return {
+      id: comment.id,
+      postId: comment.momentId,
+      momentId: comment.momentId,
+      userId: comment.userId,
+      parentId: comment.parentId,
+      content: comment.content,
+      createdAt: comment.createdAt.toISOString(),
+      author: comment.author ? AuthService.toDTO(comment.author as never) : undefined,
+      replies: ((comment.replies || []) as Array<MomentComment & { author?: { id: string; email: string; nickname: string; avatar: string; bio: string; city: string; membershipLevel: string; createdAt: Date; updatedAt: Date } }>).map((reply) =>
+        MomentService.toCommentDTO(reply),
+      ),
     };
   }
 }

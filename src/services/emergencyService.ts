@@ -15,8 +15,11 @@ interface AMapPoi {
   location?: string;
   tel?: string;
   distance?: string | number;
+  business_area?: string | string[];
   biz_ext?: {
     rating?: string | number;
+    open_time?: string;
+    open_status?: string;
   };
   type?: string;
   tag?: string;
@@ -359,6 +362,8 @@ export class EmergencyHelpService {
       rating: EmergencyHelpService.parseNumber(poi.biz_ext?.rating) ?? 0,
       distance: distanceMeters != null ? distanceMeters / 1000 : undefined,
       distanceMeters,
+      businessHours: EmergencyHelpService.cleanAMapText(poi.biz_ext?.open_time),
+      openStatus: EmergencyHelpService.cleanAMapText(poi.biz_ext?.open_status),
     };
   }
 
@@ -384,9 +389,13 @@ export class EmergencyHelpService {
   }
 
   private static firstAMapText(value?: string | string[]): string | undefined {
-    const text = Array.isArray(value) ? value[0] : value;
-    const trimmed = text?.trim();
-    return trimmed || undefined;
+    return EmergencyHelpService.cleanAMapText(Array.isArray(value) ? value[0] : value);
+  }
+
+  private static cleanAMapText(value?: string): string | undefined {
+    const trimmed = value?.trim();
+    if (!trimmed || trimmed === '[]') return undefined;
+    return trimmed;
   }
 
   private static isLikely24HourVet(poi: AMapPoi): boolean {

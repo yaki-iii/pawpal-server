@@ -121,6 +121,7 @@ model User {
   growthDiaryEntries  GrowthDiaryEntry[]
   moments             Moment[]
   momentLikes         MomentLike[]
+  momentComments      MomentComment[]
   emergencyHelps      EmergencyHelp[]
 
   @@map("users")
@@ -470,15 +471,19 @@ model Moment {
   petId     String
   content   String
   images    String[]
+  videos    String[] @default([])
   mood      String   @default("")
   location  String   @default("")
   likeCount Int      @default(0)
+  commentCount Int    @default(0)
+  shareCount Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   pet  Pet    @relation(fields: [petId], references: [id], onDelete: Cascade)
   likes MomentLike[]
+  comments MomentComment[]
 
   @@index([userId])
   @@index([petId])
@@ -497,6 +502,23 @@ model MomentLike {
 
   @@unique([userId, momentId])
   @@map("moment_likes")
+}
+
+model MomentComment {
+  id        String   @id @default(cuid())
+  momentId  String
+  userId    String
+  parentId  String?
+  content   String
+  createdAt DateTime @default(now())
+
+  moment  Moment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  author  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent  MomentComment? @relation("MomentCommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies MomentComment[] @relation("MomentCommentReplies")
+
+  @@index([momentId])
+  @@map("moment_comments")
 }
 
 // ==================== Emergency Help (紧急求助) ====================

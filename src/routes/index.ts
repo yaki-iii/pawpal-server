@@ -8,6 +8,8 @@ import aiRoutes from './aiRoutes';
 import { growthDiaryRoutes } from './growthDiaryRoutes';
 import { petMomentRoutes, momentRoutes, momentFeedRoutes } from './momentRoutes';
 import emergencyRoutes from './emergencyRoutes';
+import uploadRoutes from './uploadRoutes';
+import searchRoutes from './searchRoutes';
 import { generalRateLimiter } from '../middleware/rateLimit';
 
 const router = Router();
@@ -26,6 +28,8 @@ router.use('/posts', postRoutes); // /posts, /posts/:id, /posts/feed, etc.
 router.use('/circles', circleRoutes); // /circles, /circles/:id, etc.
 router.use('/moments', momentRoutes); // /moments/:id, /moments/:id/like
 router.use('/feed', momentFeedRoutes); // /feed/moments
+router.use('/uploads', uploadRoutes); // /uploads/images
+router.use('/search', searchRoutes); // /search?q=...
 router.use('/ai', aiRoutes);
 router.use('/reminders', reminderRoutes); // /reminders, /reminders/:id, etc.
 router.use('/emergency', emergencyRoutes); // /emergency/help, /emergency/vets, etc.

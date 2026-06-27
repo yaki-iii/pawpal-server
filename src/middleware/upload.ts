@@ -178,6 +178,17 @@ export const uploadMultiple = [upload.array('images', 9), convertHeicIfNeeded];
 export const uploadMedia = [upload.array('media', 9), convertHeicIfNeeded];
 
 /**
+ * Middleware for moment uploads (images + videos in separate field names).
+ */
+export const uploadMomentMedia = [
+  upload.fields([
+    { name: 'images', maxCount: 4 },
+    { name: 'videos', maxCount: 1 },
+  ]),
+  convertHeicIfNeeded,
+];
+
+/**
  * Helper to construct the public URL for an uploaded file.
  * For cloud-stored files, file.path already contains the full public URL.
  */

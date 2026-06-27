@@ -123,6 +123,18 @@ export interface CommentDTO {
   replies?: CommentDTO[];
 }
 
+export interface MomentCommentDTO {
+  id: string;
+  postId: string;
+  momentId: string;
+  userId: string;
+  parentId: string | null;
+  content: string;
+  createdAt: string;
+  author?: UserDTO;
+  replies?: MomentCommentDTO[];
+}
+
 export interface AIAssistantSessionDTO {
   id: string;
   userId: string;
@@ -132,12 +144,22 @@ export interface AIAssistantSessionDTO {
   questionType: string;
   summary: string;
   sources: unknown[];
+  resultCard?: AIResultCardDTO;
   status: string;
   conversationId: string | null;
   role: string;
   parentId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AIResultCardDTO {
+  severity: 'low' | 'medium' | 'high';
+  visualFindings: string[];
+  possibleCauses: string[];
+  suggestions: string[];
+  shouldSeeVet: boolean;
+  vetReminder: string;
 }
 
 export interface AISource {
@@ -153,9 +175,12 @@ export interface MomentDTO {
   petId: string;
   content: string;
   images: string[];
+  videos: string[];
   mood: string;
   location: string;
   likeCount: number;
+  commentCount: number;
+  shareCount: number;
   createdAt: string;
   updatedAt: string;
   author?: UserDTO;
@@ -192,6 +217,8 @@ export interface VetClinicDTO {
   rating: number;
   distance?: number;
   distanceMeters?: number;
+  businessHours?: string;
+  openStatus?: string;
 }
 
 export interface CircleMemberDTO {
@@ -228,6 +255,10 @@ export interface FeedQuery {
 
 export interface SearchResult {
   posts: PostDTO[];
+  circles: CircleDTO[];
+  users: UserDTO[];
+  pets: PetDTO[];
+  moments: MomentDTO[];
 }
 
 export interface GrowthDiaryEntryDTO {

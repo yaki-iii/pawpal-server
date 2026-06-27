@@ -58,6 +58,7 @@ jest.mock('../src/services/aiService', () => ({
       questionType: session.questionType,
       summary: session.summary,
       sources: session.sources,
+      resultCard: session.sources?.find?.((source: { type?: string }) => source.type === 'resultCard')?.card,
       status: session.status,
       conversationId: session.conversationId,
       role: session.role,
@@ -230,6 +231,26 @@ describe('ChatService', () => {
       expect(assistantCall.summary).toContain('AI 服务暂时不可用');
     });
 
+    it('should clearly explain image fallback when LLM is unavailable', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (prisma.aIAssistantSession.create as jest.Mock)
+        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
+        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(false);
+
+      await ChatService.chat({
+        userId: 'user-1',
+        message: '帮我看下眼睛照片',
+        imageUrls,
+      });
+
+      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
+      expect(assistantCall.summary).toContain('已收到 1 张图片');
+      expect(assistantCall.summary).toContain('当前模型暂不能直接识别图片内容');
+      expect(assistantCall.summary).toContain('请补充文字描述');
+    });
+
     it('should use fallback reply when LLM call fails', async () => {
       (prisma.aIAssistantSession.create as jest.Mock)
         .mockResolvedValueOnce(mockUserMessage)
@@ -245,6 +266,68 @@ describe('ChatService', () => {
 
       const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
       expect(assistantCall.summary).toContain('AI 服务暂时不可用');
+    });
+
+    it('should store imageUrls and include image context in the LLM prompt', async () => {
+      const imageUrls = [
+        'https://cdn.example.com/pet-eye.jpg',
+        'https://cdn.example.com/pet-skin.jpg',
+      ];
+      (prisma.aIAssistantSession.create as jest.Mock)
+        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
+        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (llmClient.chat as jest.Mock).mockResolvedValue('我已看到图片，请补充症状持续时间。');
+
+      await ChatService.chat({
+        userId: 'user-1',
+        message: '请看看这两张照片',
+        imageUrls,
+      });
+
+      const userMsgCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[0][0].data;
+      const assistantMsgCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
+      expect(userMsgCall.imageUrls).toEqual(imageUrls);
+      expect(assistantMsgCall.imageUrls).toEqual(imageUrls);
+
+      const messages = (llmClient.chat as jest.Mock).mock.calls[0][0];
+      expect(messages[messages.length - 1].content).toContain('用户上传了 2 张图片');
+      expect(messages[messages.length - 1].content).toContain(imageUrls[0]);
+      expect(messages[messages.length - 1].content).toContain('请看看这两张照片');
+    });
+
+    it('should save a structured result card for image-assisted replies', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (prisma.aIAssistantSession.create as jest.Mock)
+        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
+        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (llmClient.chat as jest.Mock).mockResolvedValue(
+        '从照片和描述看，眼部分泌物需要继续观察。\n\n- 观察精神食欲\n- 如果红肿加重请就医',
+      );
+
+      await ChatService.chat({
+        userId: 'user-1',
+        message: '请看看眼睛照片，有点红',
+        imageUrls,
+      });
+
+      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
+      expect(assistantCall.sources).toEqual([
+        {
+          type: 'resultCard',
+          card: {
+            severity: 'medium',
+            visualFindings: expect.arrayContaining(['已收到 1 张图片']),
+            possibleCauses: expect.arrayContaining(['眼部刺激或炎症']),
+            suggestions: expect.arrayContaining(['记录图片变化，观察 24 小时内是否加重']),
+            shouldSeeVet: true,
+            vetReminder: '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系兽医。',
+          },
+        },
+      ]);
     });
   });
 
@@ -266,6 +349,31 @@ describe('ChatService', () => {
       expect(result[0].messageCount).toBe(2);
       expect(result[1].id).toBe('conv-1');
       expect(result[1].messageCount).toBe(2);
+    });
+
+    it('should generate a short title from the first user message', async () => {
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([
+        {
+          ...mockAssistantMessage,
+          id: 'msg-2',
+          conversationId: 'conv-1',
+          role: 'assistant',
+          summary: '建议先观察精神食欲。',
+          createdAt: new Date('2026-06-01T10:00:30Z'),
+        },
+        {
+          ...mockUserMessage,
+          id: 'msg-1',
+          conversationId: 'conv-1',
+          role: 'user',
+          question: '我家柯基今天突然呕吐两次，还不太想吃饭，需要马上去医院吗？',
+          createdAt: new Date('2026-06-01T10:00:00Z'),
+        },
+      ]);
+
+      const result = await ChatService.listConversations('user-1');
+
+      expect(result[0].title).toBe('我家柯基今天突然呕吐两次，还不太想吃饭');
     });
 
     it('should return empty array when user has no conversations', async () => {

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { GrowthDiaryController } from '../controllers/growthDiaryController';
+import { AlbumController } from '../controllers/albumController';
 import { requireAuth } from '../middleware/auth';
 import { uploadMedia } from '../middleware/upload';
 
@@ -10,6 +11,9 @@ import { uploadMedia } from '../middleware/upload';
 export const growthDiaryRoutes = Router();
 
 growthDiaryRoutes.use(requireAuth);
+
+// Album timeline for a pet
+growthDiaryRoutes.get('/:petId/album', AlbumController.getPetAlbum);
 
 // List entries for a pet
 growthDiaryRoutes.get('/:petId/entries', GrowthDiaryController.listEntries);

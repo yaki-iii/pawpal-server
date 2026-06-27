@@ -22,6 +22,7 @@ const chatSchema = z.object({
   message: z.string().min(1, '请输入消息内容').max(2000, '消息最多2000字'),
   conversationId: z.string().optional(),
   petId: z.string().optional(),
+  imageUrls: z.array(z.string()).max(3, '最多上传3张图片').default([]),
 });
 
 // Validation schema for status update

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PetController } from '../controllers/petController';
+import { AlbumController } from '../controllers/albumController';
 import { requireAuth } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { z } from 'zod';
@@ -23,6 +24,7 @@ const petSchema = z.object({
 
 // Routes
 router.get('/', PetController.list);
+router.get('/:petId/album', AlbumController.getPetAlbum);
 router.get('/:id', PetController.getById);
 router.post('/', validateBody(petSchema), PetController.create);
 router.put('/:id', validateBody(petSchema.partial()), PetController.update);

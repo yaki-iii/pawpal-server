@@ -41,12 +41,13 @@ export class AIController {
         sendError(res, 401, '未授权');
         return;
       }
-      const { message, conversationId, petId } = req.body;
+      const { message, conversationId, petId, imageUrls } = req.body;
       const reply = await ChatService.chat({
         userId: req.userId,
         message,
         conversationId,
         petId,
+        imageUrls: imageUrls || [],
       });
       sendSuccess(res, reply, '回复成功', 201);
     } catch (error) {

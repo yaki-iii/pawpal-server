@@ -10,6 +10,7 @@ const router = Router();
 const updateProfileSchema = z.object({
   nickname: z.string().min(1, '请输入昵称').max(20, '昵称最多20字').optional(),
   avatar: z.string().optional(),
+  avatarUrl: z.string().optional(),
   bio: z.string().max(200, '简介最多200字').optional(),
   city: z.string().max(50, '城市名最多50字').optional(),
 });
@@ -37,6 +38,12 @@ router.get('/:userId', optionalAuth, UserController.getProfile);
 
 // Posts by user — public
 router.get('/:userId/posts', UserController.getUserPosts);
+
+// Moments by user — public
+router.get('/:userId/moments', UserController.getUserMoments);
+
+// Liked posts as favorites MVP — private
+router.get('/:userId/liked-posts', requireAuth, UserController.getLikedPosts);
 
 // Follow — requires auth
 router.post('/:userId/follow', requireAuth, UserController.toggleFollow);

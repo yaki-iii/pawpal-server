@@ -287,6 +287,7 @@ export class AIService {
    * Convert a Prisma AIAssistantSession to a DTO.
    */
   static toDTO(session: AIAssistantSession): AIAssistantSessionDTO {
+    const sources = session.sources as unknown[];
     return {
       id: session.id,
       userId: session.userId,
@@ -295,7 +296,8 @@ export class AIService {
       imageUrls: session.imageUrls,
       questionType: session.questionType,
       summary: session.summary,
-      sources: session.sources as unknown[],
+      sources,
+      resultCard: AIService.resultCardFromSources(sources),
       status: session.status,
       conversationId: (session as { conversationId?: string | null }).conversationId ?? null,
       role: (session as { role?: string }).role ?? 'user',
@@ -303,5 +305,15 @@ export class AIService {
       createdAt: session.createdAt.toISOString(),
       updatedAt: session.updatedAt.toISOString(),
     };
+  }
+
+  private static resultCardFromSources(sources: unknown[]): AIAssistantSessionDTO['resultCard'] {
+    const entry = sources.find((source) => {
+      return typeof source === 'object'
+        && source !== null
+        && (source as { type?: unknown }).type === 'resultCard';
+    });
+    if (!entry || typeof entry !== 'object') return undefined;
+    return (entry as { card?: AIAssistantSessionDTO['resultCard'] }).card;
   }
 }

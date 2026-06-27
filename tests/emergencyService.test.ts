@@ -248,7 +248,8 @@ describe('EmergencyHelpService', () => {
               location: '121.4737,31.2304',
               tel: '021-12345678',
               distance: '450',
-              biz_ext: { rating: '4.8' },
+              business_area: '北滘',
+              biz_ext: { rating: '4.8', open_time: '00:00-24:00', open_status: '营业中' },
             },
           ],
         }),
@@ -268,6 +269,8 @@ describe('EmergencyHelpService', () => {
           is24Hour: true,
           rating: 4.8,
           distance: 0.45,
+          businessHours: '00:00-24:00',
+          openStatus: '营业中',
         }),
       );
       expect(prisma.vetClinic.findMany).not.toHaveBeenCalled();
