@@ -3,12 +3,15 @@ import { config } from './config';
 import { createApp } from './app';
 import { logger } from './utils/logger';
 import { startScheduler } from './utils/scheduler';
+import { runStartupMigrations } from './utils/startupMigration';
 
 /**
  * Server entry point.
  * Starts the Express server and initializes background tasks (cron scheduler).
  */
 async function main(): Promise<void> {
+  await runStartupMigrations();
+
   const app = createApp();
 
   const server = app.listen(config.port, () => {
