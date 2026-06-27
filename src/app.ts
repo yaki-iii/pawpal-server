@@ -8,7 +8,7 @@ import { errorHandler, notFoundHandler } from './middleware/error';
 import { apiRoutes } from './routes';
 import { prisma } from './config/database';
 
-const BUILD_ID = 'pawpal-v04-schema-guard-20260627';
+const BUILD_ID = 'pawpal-v04-upload-fields-20260628';
 
 /**
  * Creates and configures the Express application.

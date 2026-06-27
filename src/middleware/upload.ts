@@ -97,7 +97,7 @@ export async function convertHeicIfNeeded(
   _res: Express.Response,
   next: () => void,
 ): Promise<void> {
-  const files = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : null);
+  const files = requestFiles(req);
   if (!files || files.length === 0) {
     next();
     return;
@@ -160,6 +160,13 @@ export async function convertHeicIfNeeded(
   }
 
   next();
+}
+
+function requestFiles(req: Express.Request): Express.Multer.File[] | null {
+  if (req.file) return [req.file];
+  if (!req.files) return null;
+  if (Array.isArray(req.files)) return req.files;
+  return Object.values(req.files).flat();
 }
 
 /**
