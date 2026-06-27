@@ -11,6 +11,7 @@ const createMomentSchema = z.object({
   videos: z.union([z.array(z.string()), z.string()]).optional(),
   mood: z.string().max(20, '心情最多20字').optional(),
   location: z.string().max(50, '位置最多50字').optional(),
+  visibility: z.enum(['PUBLIC', 'FOLLOWERS', 'PRIVATE']).default('PUBLIC'),
 });
 
 const createMomentCommentSchema = z.object({

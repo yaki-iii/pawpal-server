@@ -474,6 +474,7 @@ model Moment {
   videos    String[] @default([])
   mood      String   @default("")
   location  String   @default("")
+  visibility String  @default("PUBLIC")
   likeCount Int      @default(0)
   commentCount Int    @default(0)
   shareCount Int      @default(0)

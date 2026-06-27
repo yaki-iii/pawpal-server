@@ -82,6 +82,7 @@ export class UserController {
       const moments = await ProfileContentService.listUserMoments(
         req.params.userId,
         parseInt(limit as string, 10),
+        req.userId,
       );
       sendSuccess(res, moments);
     } catch (error) {

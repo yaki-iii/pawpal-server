@@ -56,10 +56,13 @@ export class GrowthDiaryService {
     // Separate photos and videos by mimetype
     const photos: string[] = [];
     const videos: string[] = [];
-    const dateStr = new Date().toISOString().slice(0, 10);
 
     for (const file of files) {
-      const fileUrl = getFileUrl(file.filename, dateStr);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const pathUrl = file.path && (file.path.startsWith('http') || file.path.startsWith('/api/v1/uploads/'))
+        ? file.path
+        : undefined;
+      const fileUrl = pathUrl || getFileUrl(file.filename, dateStr);
       if (file.mimetype.startsWith('video/')) {
         videos.push(fileUrl);
       } else {

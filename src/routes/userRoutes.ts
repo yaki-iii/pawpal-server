@@ -39,8 +39,8 @@ router.get('/:userId', optionalAuth, UserController.getProfile);
 // Posts by user — public
 router.get('/:userId/posts', UserController.getUserPosts);
 
-// Moments by user — public
-router.get('/:userId/moments', UserController.getUserMoments);
+// Moments by user — public (optional auth for visibility filtering)
+router.get('/:userId/moments', optionalAuth, UserController.getUserMoments);
 
 // Liked posts as favorites MVP — private
 router.get('/:userId/liked-posts', requireAuth, UserController.getLikedPosts);

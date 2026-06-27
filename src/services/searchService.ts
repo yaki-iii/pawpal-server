@@ -90,6 +90,7 @@ export class SearchService {
   static async searchMoments(keyword: string, limit: number = 10): Promise<MomentDTO[]> {
     const moments = await prisma.moment.findMany({
       where: {
+        visibility: 'PUBLIC',
         OR: [
           { content: { contains: keyword, mode: 'insensitive' } },
           { mood: { contains: keyword, mode: 'insensitive' } },

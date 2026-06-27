@@ -5,6 +5,7 @@ jest.mock('../src/config/database', () => ({
   prisma: {
     moment: { findMany: jest.fn() },
     like: { findMany: jest.fn() },
+    follow: { findMany: jest.fn() },
   },
 }));
 
@@ -59,9 +60,13 @@ describe('ProfileContentService', () => {
         petId: 'pet-1',
         content: '今天晒太阳',
         images: [],
+        videos: [],
         mood: 'happy',
         location: '',
+        visibility: 'PUBLIC',
         likeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
         createdAt: now,
         updatedAt: now,
         user,
@@ -74,7 +79,7 @@ describe('ProfileContentService', () => {
     expect(result).toHaveLength(1);
     expect(result[0].content).toBe('今天晒太阳');
     expect(prisma.moment.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId: 'user-1' },
+      where: { userId: 'user-1', visibility: 'PUBLIC' },
       orderBy: { createdAt: 'desc' },
     }));
   });

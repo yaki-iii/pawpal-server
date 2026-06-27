@@ -6,6 +6,8 @@ import { AuthService } from './authService';
 import { PetService } from './petService';
 import { NotificationService } from './notificationService';
 
+type MomentVisibility = 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+
 /**
  * MomentService — lightweight daily moments (日常碎片).
  *
@@ -29,6 +31,7 @@ export class MomentService {
       videos?: string[];
       mood?: string;
       location?: string;
+      visibility?: MomentVisibility;
     },
   ): Promise<MomentDTO> {
     const pet = await prisma.pet.findUnique({ where: { id: petId } });
@@ -44,6 +47,7 @@ export class MomentService {
         videos: data.videos || [],
         mood: data.mood || '',
         location: data.location || '',
+        visibility: MomentService.normalizedVisibility(data.visibility),
       },
       include: { user: true, pet: true },
     });
@@ -65,7 +69,13 @@ export class MomentService {
     limit: number = 20,
     userId?: string,
   ): Promise<PaginatedResult<MomentDTO>> {
-    const where: Record<string, unknown> = { petId };
+    const pet = await prisma.pet.findUnique({ where: { id: petId } });
+    if (!pet) throw new Error('宠物不存在');
+
+    const where: Record<string, unknown> = {
+      petId,
+      visibility: await MomentService.visibilityFilterForPetViewer(pet.userId, userId),
+    };
     if (cursor) {
       where.createdAt = { lt: new Date(cursor) };
     }
@@ -134,6 +144,14 @@ export class MomentService {
     }
 
     const where: Record<string, unknown> = { petId: { in: petIds } };
+    if (followingOnly) {
+      where.visibility = { in: ['PUBLIC', 'FOLLOWERS'] };
+    } else {
+      where.OR = [
+        { userId },
+        { userId: { in: followedIds }, visibility: { in: ['PUBLIC', 'FOLLOWERS'] } },
+      ];
+    }
     if (cursor) {
       where.createdAt = { lt: new Date(cursor) };
     }
@@ -237,6 +255,13 @@ export class MomentService {
     const moment = await prisma.moment.findUnique({ where: { id: momentId } });
     if (!moment) throw new Error('碎片不存在');
 
+    if (parentId) {
+      const parent = await prisma.momentComment.findUnique({ where: { id: parentId } });
+      if (!parent || parent.momentId !== momentId) {
+        throw new Error('回复的评论不存在');
+      }
+    }
+
     const comment = await prisma.momentComment.create({
       data: {
         momentId,
@@ -333,6 +358,7 @@ export class MomentService {
       videos: (moment as { videos?: string[] }).videos || [],
       mood: moment.mood,
       location: moment.location,
+      visibility: MomentService.normalizedVisibility((moment as { visibility?: string }).visibility),
       likeCount: moment.likeCount,
       commentCount: (moment as { commentCount?: number }).commentCount || 0,
       shareCount: (moment as { shareCount?: number }).shareCount || 0,
@@ -344,6 +370,25 @@ export class MomentService {
   private static diaryTitleFor(content: string): string {
     const title = content.trim();
     return title.length > 0 ? title.slice(0, 18) : '日常碎片';
+  }
+
+  private static normalizedVisibility(visibility?: string): MomentVisibility {
+    return visibility === 'FOLLOWERS' || visibility === 'PRIVATE' ? visibility : 'PUBLIC';
+  }
+
+  private static async visibilityFilterForPetViewer(
+    ownerId: string,
+    viewerId?: string,
+  ): Promise<'PUBLIC' | { in: MomentVisibility[] }> {
+    if (!viewerId) return 'PUBLIC';
+    if (viewerId === ownerId) return { in: ['PUBLIC', 'FOLLOWERS', 'PRIVATE'] };
+
+    const follows = await prisma.follow.findMany({
+      where: { followerId: viewerId, followeeId: ownerId },
+      select: { followeeId: true },
+    });
+
+    return follows.length > 0 ? { in: ['PUBLIC', 'FOLLOWERS'] } : 'PUBLIC';
   }
 
   private static growthDiaryEntryToDTO(entry: GrowthDiaryEntry): GrowthDiaryEntryDTO {

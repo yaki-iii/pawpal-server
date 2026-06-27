@@ -26,6 +26,7 @@ jest.mock('../src/config/database', () => ({
     },
     momentComment: {
       create: jest.fn(),
+      findUnique: jest.fn(),
       findMany: jest.fn(),
     },
     follow: {
@@ -99,6 +100,7 @@ const mockMoment = {
   videos: [],
   mood: '无奈',
   location: '杭州',
+  visibility: 'PUBLIC',
   likeCount: 3,
   shareCount: 0,
   createdAt: new Date('2026-06-01'),
@@ -181,6 +183,40 @@ describe('MomentService', () => {
       expect(createData.location).toBe('');
     });
 
+    it('should default visibility to PUBLIC when not provided', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.moment.create as jest.Mock).mockResolvedValue({
+        ...mockMoment,
+        user: mockUser,
+        pet: mockPet,
+      });
+
+      const moment = await MomentService.createMoment('user-1', 'pet-1', { content: '公开碎片' });
+
+      const createData = (prisma.moment.create as jest.Mock).mock.calls[0][0].data;
+      expect(createData.visibility).toBe('PUBLIC');
+      expect(moment.visibility).toBe('PUBLIC');
+    });
+
+    it('should create a private moment when requested', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.moment.create as jest.Mock).mockResolvedValue({
+        ...mockMoment,
+        visibility: 'PRIVATE',
+        user: mockUser,
+        pet: mockPet,
+      });
+
+      const moment = await MomentService.createMoment('user-1', 'pet-1', {
+        content: '私密碎片',
+        visibility: 'PRIVATE',
+      });
+
+      const createData = (prisma.moment.create as jest.Mock).mock.calls[0][0].data;
+      expect(createData.visibility).toBe('PRIVATE');
+      expect(moment.visibility).toBe('PRIVATE');
+    });
+
     it('should create a moment with videos', async () => {
       (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
       (prisma.moment.create as jest.Mock).mockResolvedValue({
@@ -204,6 +240,7 @@ describe('MomentService', () => {
 
   describe('listByPet', () => {
     it('should list moments for a pet, newest first', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
       (prisma.moment.findMany as jest.Mock).mockResolvedValue([mockMoment]);
 
       const result = await MomentService.listByPet('pet-1', undefined, 10);
@@ -211,7 +248,7 @@ describe('MomentService', () => {
       expect(result.items).toHaveLength(1);
       expect(prisma.moment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { petId: 'pet-1' },
+          where: { petId: 'pet-1', visibility: 'PUBLIC' },
           orderBy: { createdAt: 'desc' },
           take: 11, // limit + 1
         }),
@@ -219,6 +256,7 @@ describe('MomentService', () => {
     });
 
     it('should apply cursor pagination', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
       (prisma.moment.findMany as jest.Mock).mockResolvedValue([]);
 
       await MomentService.listByPet('pet-1', '2026-06-01T00:00:00.000Z', 10);
@@ -228,6 +266,7 @@ describe('MomentService', () => {
     });
 
     it('should set nextCursor when there are more items', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
       const moments = Array.from({ length: 11 }, (_, i) => ({
         ...mockMoment,
         id: `m-${i}`,
@@ -242,6 +281,7 @@ describe('MomentService', () => {
     });
 
     it('should return null nextCursor when no more items', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
       (prisma.moment.findMany as jest.Mock).mockResolvedValue([mockMoment]);
 
       const result = await MomentService.listByPet('pet-1', undefined, 10);
@@ -251,12 +291,40 @@ describe('MomentService', () => {
     });
 
     it('should add isLiked status when userId is provided', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
       (prisma.moment.findMany as jest.Mock).mockResolvedValue([mockMoment]);
       (prisma.momentLike.findMany as jest.Mock).mockResolvedValue([{ momentId: 'moment-1' }]);
 
       const result = await MomentService.listByPet('pet-1', undefined, 10, 'user-1');
 
       expect(result.items[0].isLiked).toBe(true);
+    });
+
+    it('should include all visibility levels when viewer owns the pet', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([mockMoment]);
+      (prisma.momentLike.findMany as jest.Mock).mockResolvedValue([]);
+
+      await MomentService.listByPet('pet-1', undefined, 10, 'user-1');
+
+      const where = (prisma.moment.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.visibility).toEqual({ in: ['PUBLIC', 'FOLLOWERS', 'PRIVATE'] });
+    });
+
+    it('should include follower-only moments for followers', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.follow.findMany as jest.Mock).mockResolvedValue([{ followeeId: 'user-1' }]);
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([mockMoment]);
+      (prisma.momentLike.findMany as jest.Mock).mockResolvedValue([]);
+
+      await MomentService.listByPet('pet-1', undefined, 10, 'follower-1');
+
+      expect(prisma.follow.findMany).toHaveBeenCalledWith({
+        where: { followerId: 'follower-1', followeeId: 'user-1' },
+        select: { followeeId: true },
+      });
+      const where = (prisma.moment.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.visibility).toEqual({ in: ['PUBLIC', 'FOLLOWERS'] });
     });
   });
 
@@ -278,6 +346,10 @@ describe('MomentService', () => {
       // Verify petIds filter was applied
       const where = (prisma.moment.findMany as jest.Mock).mock.calls[0][0].where;
       expect(where.petId).toEqual({ in: ['pet-1', 'pet-2'] });
+      expect(where.OR).toEqual([
+        { userId: 'user-1' },
+        { userId: { in: ['user-2'] }, visibility: { in: ['PUBLIC', 'FOLLOWERS'] } },
+      ]);
     });
 
     it('should include only followed users pets when followingOnly is true', async () => {
@@ -298,6 +370,7 @@ describe('MomentService', () => {
       });
       const where = (prisma.moment.findMany as jest.Mock).mock.calls[0][0].where;
       expect(where.petId).toEqual({ in: ['pet-2'] });
+      expect(where.visibility).toEqual({ in: ['PUBLIC', 'FOLLOWERS'] });
     });
 
     it('should return empty when user has no pets and follows no one with pets', async () => {
@@ -458,6 +531,62 @@ describe('MomentService', () => {
       });
     });
 
+    it('should create a reply when parent comment belongs to the same moment', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(mockMoment);
+      (prisma.momentComment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'comment-1',
+        momentId: 'moment-1',
+        userId: 'user-2',
+        parentId: null,
+        content: '好可爱',
+        createdAt: new Date('2026-06-03T00:00:00Z'),
+      });
+      (prisma.momentComment.create as jest.Mock).mockResolvedValue({
+        id: 'reply-1',
+        momentId: 'moment-1',
+        userId: 'user-1',
+        parentId: 'comment-1',
+        content: '谢谢',
+        createdAt: new Date('2026-06-03T00:10:00Z'),
+        author: mockUser,
+      });
+      (prisma.moment.update as jest.Mock).mockResolvedValue({});
+
+      const reply = await MomentService.createComment('moment-1', 'user-1', '谢谢', 'comment-1');
+
+      expect(reply.parentId).toBe('comment-1');
+      expect(prisma.momentComment.findUnique).toHaveBeenCalledWith({
+        where: { id: 'comment-1' },
+      });
+      expect(prisma.momentComment.create).toHaveBeenCalledWith({
+        data: {
+          momentId: 'moment-1',
+          userId: 'user-1',
+          parentId: 'comment-1',
+          content: '谢谢',
+        },
+        include: { author: true },
+      });
+    });
+
+    it('should reject a reply when parent comment belongs to another moment', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(mockMoment);
+      (prisma.momentComment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'comment-other',
+        momentId: 'other-moment',
+        userId: 'user-2',
+        parentId: null,
+        content: '另一个碎片的评论',
+        createdAt: new Date('2026-06-03T00:00:00Z'),
+      });
+
+      await expect(
+        MomentService.createComment('moment-1', 'user-1', '串错了', 'comment-other'),
+      ).rejects.toThrow('回复的评论不存在');
+      expect(prisma.momentComment.create).not.toHaveBeenCalled();
+      expect(prisma.moment.update).not.toHaveBeenCalled();
+    });
+
     it('should throw when commenting on a missing moment', async () => {
       (prisma.moment.findUnique as jest.Mock).mockResolvedValue(null);
 
@@ -547,6 +676,7 @@ describe('MomentService', () => {
       const dto = MomentService.toDTO(mockMoment);
       expect(dto.id).toBe('moment-1');
       expect(dto.content).toBe('煤球今天又拆家了');
+      expect(dto.visibility).toBe('PUBLIC');
       expect(dto.likeCount).toBe(3);
       expect(dto.createdAt).toBe('2026-06-01T00:00:00.000Z');
       expect(dto.updatedAt).toBe('2026-06-01T00:00:00.000Z');

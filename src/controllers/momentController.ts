@@ -26,7 +26,7 @@ export class MomentController {
         sendError(res, 401, '未授权');
         return;
       }
-      const { content, images, videos, mood, location } = req.body;
+      const { content, images, videos, mood, location, visibility } = req.body;
       const bodyImages = Array.isArray(images) ? images : images ? [images] : [];
       const bodyVideos = Array.isArray(videos) ? videos : videos ? [videos] : [];
       const uploadedMedia = UploadController.uploadedMediaUrls(MomentController.uploadedFiles(req.files));
@@ -42,6 +42,7 @@ export class MomentController {
         videos: videoUrls,
         mood,
         location,
+        visibility,
       });
       sendSuccess(res, moment, '发布成功', 201);
     } catch (error) {

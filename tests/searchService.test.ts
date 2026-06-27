@@ -104,9 +104,13 @@ describe('SearchService', () => {
           petId: 'pet-1',
           content: '布偶今天精神很好',
           images: [],
+          videos: [],
           mood: 'happy',
           location: '佛山',
+          visibility: 'PUBLIC',
           likeCount: 0,
+          commentCount: 0,
+          shareCount: 0,
           createdAt: now,
           updatedAt: now,
           user,
@@ -128,6 +132,22 @@ describe('SearchService', () => {
       expect(result.moments[0].content).toBe('布偶今天精神很好');
       expect(prisma.pet.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ userId: 'user-1' }),
+      }));
+    });
+
+    it('should only search public moments', async () => {
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.circle.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.pet.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([]);
+
+      await SearchService.searchAll('布偶', 5, 'user-1');
+
+      expect(prisma.moment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          visibility: 'PUBLIC',
+        }),
       }));
     });
   });

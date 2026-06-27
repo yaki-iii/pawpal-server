@@ -178,6 +178,7 @@ export interface MomentDTO {
   videos: string[];
   mood: string;
   location: string;
+  visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
   likeCount: number;
   commentCount: number;
   shareCount: number;

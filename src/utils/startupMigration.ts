@@ -11,6 +11,7 @@ export async function runStartupMigrations(): Promise<void> {
     await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "videos" TEXT[] DEFAULT ARRAY[]::TEXT[]');
     await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "commentCount" INTEGER NOT NULL DEFAULT 0');
     await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "shareCount" INTEGER NOT NULL DEFAULT 0');
+    await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "visibility" TEXT NOT NULL DEFAULT \'PUBLIC\'');
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "moment_comments" (
         "id" TEXT NOT NULL,
