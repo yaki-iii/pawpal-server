@@ -10,13 +10,15 @@ import { runStartupMigrations } from './utils/startupMigration';
  * Starts the Express server and initializes background tasks (cron scheduler).
  */
 async function main(): Promise<void> {
-  await runStartupMigrations();
-
   const app = createApp();
 
   const server = app.listen(config.port, () => {
     logger.info(`🚀 PawPal server running on http://localhost:${config.port}`);
     logger.info(`📡 Environment: ${config.nodeEnv}`);
+  });
+
+  void runStartupMigrations().catch((error) => {
+    logger.error(`Startup database guards failed: ${error}`);
   });
 
   // Start background cron scheduler (reminders, data cleanup)
@@ -44,7 +46,13 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error) => {
+export async function startServer(): Promise<void> {
+  await main();
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
   logger.error(`Failed to start server: ${error}`);
   process.exit(1);
-});
+  });
+}
