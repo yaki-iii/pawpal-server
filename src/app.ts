@@ -6,6 +6,9 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { apiRoutes } from './routes';
+import { prisma } from './config/database';
+
+const BUILD_ID = 'pawpal-v04-schema-guard-20260627';
 
 /**
  * Creates and configures the Express application.
@@ -36,8 +39,33 @@ export function createApp(): Application {
   app.use('/api/v1/uploads', express.static(path.resolve(process.cwd(), config.upload.dir)));
 
   // Health check endpoint
-  app.get('/api/v1/health', (_req, res) => {
-    res.json({ code: 0, data: { status: 'ok', timestamp: new Date().toISOString() }, message: 'success' });
+  app.get('/api/v1/health', async (_req, res) => {
+    let momentsVideos = false;
+    try {
+      const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'moments'
+            AND column_name = 'videos'
+        ) AS "exists"
+      `;
+      momentsVideos = rows[0]?.exists ?? false;
+    } catch (error) {
+      logger.warn(`Health schema check failed: ${(error as Error).message}`);
+    }
+
+    res.json({
+      code: 0,
+      data: {
+        status: 'ok',
+        buildId: BUILD_ID,
+        schema: { momentsVideos },
+        timestamp: new Date().toISOString(),
+      },
+      message: 'success',
+    });
   });
 
   // API routes
