@@ -10,11 +10,13 @@ const router = Router();
 // All AI routes require authentication
 router.use(requireAuth);
 
+export const aiImageUploadMaxCount = 9;
+
 // Validation schema for consult
 const consultSchema = z.object({
   question: z.string().min(5, '请详细描述问题（至少5个字）').max(1000, '问题最多1000字'),
   petId: z.string().optional(),
-  imageUrls: z.array(z.string()).max(4, '最多上传4张图片').default([]),
+  imageUrls: z.array(z.string()).max(aiImageUploadMaxCount, '最多上传9张图片').default([]),
 });
 
 // Validation schema for multi-turn chat
@@ -22,7 +24,7 @@ const chatSchema = z.object({
   message: z.string().min(1, '请输入消息内容').max(2000, '消息最多2000字'),
   conversationId: z.string().optional(),
   petId: z.string().optional(),
-  imageUrls: z.array(z.string()).max(3, '最多上传3张图片').default([]),
+  imageUrls: z.array(z.string()).max(aiImageUploadMaxCount, '最多上传9张图片').default([]),
 });
 
 // Validation schema for status update

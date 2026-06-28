@@ -187,9 +187,11 @@ export const uploadMedia = [upload.array('media', 9), convertHeicIfNeeded];
 /**
  * Middleware for moment uploads (images + videos in separate field names).
  */
+export const momentImageUploadMaxCount = 9;
+
 export const uploadMomentMedia = [
   upload.fields([
-    { name: 'images', maxCount: 4 },
+    { name: 'images', maxCount: momentImageUploadMaxCount },
     { name: 'videos', maxCount: 1 },
   ]),
   convertHeicIfNeeded,

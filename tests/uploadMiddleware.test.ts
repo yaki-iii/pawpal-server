@@ -45,4 +45,10 @@ describe('upload middleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledWith();
   });
+
+  it('should allow up to 9 images for moment uploads', () => {
+    const { momentImageUploadMaxCount } = require('../src/middleware/upload') as typeof import('../src/middleware/upload');
+
+    expect(momentImageUploadMaxCount).toBe(9);
+  });
 });
