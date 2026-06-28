@@ -464,7 +464,7 @@ export class EmergencyHelpService {
   }
 
   private static isLikely24HourVet(poi: AMapPoi): boolean {
-    const text = [poi.name, poi.type, poi.tag].filter(Boolean).join(' ');
-    return /24\s*(小时|h|H)|全天|夜间急诊/.test(text);
+    const text = [poi.name, poi.type, poi.tag, poi.biz_ext?.open_time].filter(Boolean).join(' ');
+    return /24\s*(小时|h|H)|全天|夜间急诊|00:00\s*-\s*24:00|全天营业/.test(text);
   }
 }

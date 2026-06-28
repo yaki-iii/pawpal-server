@@ -325,6 +325,38 @@ describe('EmergencyHelpService', () => {
       expect(prisma.vetClinic.findMany).not.toHaveBeenCalled();
     });
 
+    it('should mark AMap vets as 24h from business hours', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          pois: [
+            {
+              id: 'B002',
+              name: '安心动物医院',
+              address: '测试路2号',
+              cityname: '佛山市',
+              adname: '顺德区',
+              location: '113.2172,22.9326',
+              tel: '0757-12345678',
+              distance: '300',
+              biz_ext: { rating: '4.6', open_time: '00:00-24:00', open_status: '营业中' },
+            },
+          ],
+        }),
+      });
+
+      const result = await EmergencyHelpService.listNearbyVets(22.9326, 113.2172, 10);
+
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          name: '安心动物医院',
+          is24Hour: true,
+          businessHours: '00:00-24:00',
+        }),
+      );
+    });
+
     it('should fall back to local DB vets when AMap search fails', async () => {
       (global.fetch as jest.Mock).mockRejectedValue(new Error('amap unavailable'));
       (prisma.vetClinic.findMany as jest.Mock).mockResolvedValue([
