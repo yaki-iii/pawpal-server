@@ -297,6 +297,26 @@ describe('ChatService', () => {
       expect(messages[messages.length - 1].content).toContain('请看看这两张照片');
     });
 
+    it('should always include a clear image limitation notice when images are attached', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (prisma.aIAssistantSession.create as jest.Mock)
+        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
+        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (llmClient.chat as jest.Mock).mockResolvedValue('从图片看可能是眼部发红，建议观察。');
+
+      await ChatService.chat({
+        userId: 'user-1',
+        message: '请看看眼睛照片',
+        imageUrls,
+      });
+
+      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
+      expect(assistantCall.summary).toContain('当前 AI 暂不能直接识别图片细节');
+      expect(assistantCall.summary).toContain('请补充文字描述');
+    });
+
     it('should save a structured result card for image-assisted replies', async () => {
       const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
       (prisma.aIAssistantSession.create as jest.Mock)

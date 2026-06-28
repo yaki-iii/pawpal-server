@@ -113,6 +113,7 @@ export class ChatService {
     } else {
       assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
     }
+    assistantReply = ChatService.ensureImageLimitationNotice(assistantReply, imageUrls.length);
 
     const resultCard = ChatService.buildResultCard(message, assistantReply, imageUrls);
     const assistantSources = resultCard ? [{ type: 'resultCard', card: resultCard }] : [];
@@ -240,6 +241,18 @@ export class ChatService {
       '3. 如果是紧急情况，请使用 /api/v1/emergency/help 接口\n\n' +
       '⚠️ 以上内容仅供参考，不构成专业兽医建议，复杂情况请及时就医。'
     );
+  }
+
+  private static ensureImageLimitationNotice(reply: string, imageCount: number): string {
+    if (imageCount === 0 || reply.includes('不能直接识别图片')) {
+      return reply;
+    }
+
+    return [
+      reply,
+      '',
+      `已收到 ${imageCount} 张图片。当前 AI 暂不能直接识别图片细节，请补充文字描述：部位、颜色/形态变化、持续时间、精神食欲、是否疼痛或出血。`,
+    ].join('\n');
   }
 
   private static buildUserPrompt(message: string, imageUrls: string[]): string {
