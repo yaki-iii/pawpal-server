@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 // Validation schemas
 const postSchema = z.object({
-  title: z.string().min(1, '请输入标题').max(100, '标题最多100字'),
+  title: z.string().max(100, '标题最多100字').default(''),
   content: z.string().min(1, '请输入内容').max(5000, '内容最多5000字'),
   circleId: z.string().optional(),
   petId: z.string().optional(),

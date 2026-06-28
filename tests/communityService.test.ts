@@ -202,6 +202,22 @@ describe('CommunityService', () => {
       expect(createData.images).toEqual([]);
       expect(createData.tags).toEqual([]);
     });
+
+    it('should derive a display title when title is blank', async () => {
+      (prisma.post.create as jest.Mock).mockResolvedValue({
+        ...mockPost,
+        title: '今天记录一下毛孩子',
+        content: '今天记录一下毛孩子，状态不错。',
+      });
+
+      await CommunityService.publishPost('user-1', {
+        title: '',
+        content: '今天记录一下毛孩子，状态不错。',
+      });
+
+      const createData = (prisma.post.create as jest.Mock).mock.calls[0][0].data;
+      expect(createData.title).toBe('今天记录一下毛孩子');
+    });
   });
 
   describe('getPostById', () => {
@@ -369,6 +385,13 @@ describe('CommunityService', () => {
 
     it('should support reply (with parentId)', async () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'comment-1',
+        postId: 'post-1',
+        userId: 'user-2',
+        parentId: null,
+        content: '好厉害！',
+      });
       (prisma.comment.create as jest.Mock).mockResolvedValue({
         id: 'comment-2',
         postId: 'post-1',
@@ -392,10 +415,70 @@ describe('CommunityService', () => {
       });
     });
 
+    it('should reject reply when parent comment does not exist', async () => {
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(CommunityService.createComment('post-1', 'user-1', '谢谢！', 'missing-comment')).rejects.toThrow('父评论不存在');
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject reply when parent comment belongs to another post', async () => {
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'comment-1',
+        postId: 'other-post',
+        userId: 'user-2',
+        parentId: null,
+        content: '另一篇动态的评论',
+      });
+
+      await expect(CommunityService.createComment('post-1', 'user-1', '谢谢！', 'comment-1')).rejects.toThrow('父评论不存在');
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
     it('should throw error if post does not exist', async () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(null);
 
       await expect(CommunityService.createComment('nonexistent', 'user-1', 'test')).rejects.toThrow('动态不存在');
+    });
+  });
+
+  describe('deleteComment', () => {
+    it('should delete a comment that belongs to the post', async () => {
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'comment-1',
+        postId: 'post-1',
+        userId: 'user-1',
+        parentId: null,
+        content: '好厉害！',
+      });
+      (prisma.comment.delete as jest.Mock).mockResolvedValue({});
+      (prisma.post.update as jest.Mock).mockResolvedValue({});
+
+      await CommunityService.deleteComment('post-1', 'comment-1', 'user-1');
+
+      expect(prisma.comment.delete).toHaveBeenCalledWith({ where: { id: 'comment-1' } });
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        data: { commentCount: { decrement: 1 } },
+      });
+    });
+
+    it('should reject deleting a comment from another post', async () => {
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'comment-1',
+        postId: 'other-post',
+        userId: 'user-1',
+        parentId: null,
+        content: '另一篇动态的评论',
+      });
+
+      await expect(CommunityService.deleteComment('post-1', 'comment-1', 'user-1')).rejects.toThrow('评论不存在');
+      expect(prisma.comment.delete).not.toHaveBeenCalled();
+      expect(prisma.post.update).not.toHaveBeenCalled();
     });
   });
 

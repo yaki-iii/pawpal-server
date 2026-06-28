@@ -57,10 +57,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.4 album video build id', async () => {
+  it('exposes the current v0.4 contract-closure build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v04-album-video-20260628');
+    expect(BUILD_ID).toBe('pawpal-v04-contract-closure-20260628');
   });
 });

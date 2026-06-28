@@ -27,12 +27,13 @@ export class CommunityService {
       tags?: string[];
     },
   ): Promise<PostDTO> {
+    const title = CommunityService.postDisplayTitle(data.title, data.content);
     const post = await prisma.post.create({
       data: {
         userId,
         circleId: data.circleId || null,
         petId: data.petId || null,
-        title: data.title,
+        title,
         content: data.content,
         images: data.images || [],
         tags: data.tags || [],
@@ -69,6 +70,14 @@ export class CommunityService {
       dto.circle = CommunityService.toCircleDTO(post.circle);
     }
     return dto;
+  }
+
+  private static postDisplayTitle(title: string | undefined, content: string): string {
+    const cleanTitle = (title || '').trim();
+    if (cleanTitle) return cleanTitle;
+    const cleanContent = (content || '').trim().replace(/\s+/g, ' ');
+    const firstSentence = cleanContent.split(/[，,。.!！?？]/)[0]?.trim();
+    return firstSentence ? firstSentence.slice(0, 20) : cleanContent.slice(0, 20) || '动态';
   }
 
   /**
@@ -207,6 +216,13 @@ export class CommunityService {
       throw new Error('动态不存在');
     }
 
+    if (parentId) {
+      const parent = await prisma.comment.findUnique({ where: { id: parentId } });
+      if (!parent || parent.postId !== postId) {
+        throw new Error('父评论不存在');
+      }
+    }
+
     const comment = await prisma.comment.create({
       data: {
         postId,
@@ -242,6 +258,9 @@ export class CommunityService {
   static async deleteComment(postId: string, commentId: string, userId: string): Promise<void> {
     const comment = await prisma.comment.findUnique({ where: { id: commentId } });
     if (!comment) {
+      throw new Error('评论不存在');
+    }
+    if (comment.postId !== postId) {
       throw new Error('评论不存在');
     }
     if (comment.userId !== userId) {

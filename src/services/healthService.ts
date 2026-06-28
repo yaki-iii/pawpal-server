@@ -94,6 +94,11 @@ export class HealthService {
    * Delete a health record.
    */
   static async deleteHealthRecord(petId: string, recordId: string): Promise<void> {
+    const record = await prisma.healthRecord.findUnique({ where: { id: recordId } });
+    if (!record || record.petId !== petId) {
+      throw new Error('健康记录不存在');
+    }
+
     await prisma.healthRecord.delete({ where: { id: recordId } });
     logger.info(`Health record deleted: ${recordId}`);
   }
@@ -138,6 +143,11 @@ export class HealthService {
    * Delete a weight record.
    */
   static async deleteWeightRecord(petId: string, recordId: string): Promise<void> {
+    const record = await prisma.weightRecord.findUnique({ where: { id: recordId } });
+    if (!record || record.petId !== petId) {
+      throw new Error('体重记录不存在');
+    }
+
     await prisma.weightRecord.delete({ where: { id: recordId } });
   }
 

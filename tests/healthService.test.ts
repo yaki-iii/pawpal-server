@@ -7,12 +7,14 @@ jest.mock('../src/config/database', () => ({
   prisma: {
     healthRecord: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
     weightRecord: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       delete: jest.fn(),
     },
@@ -245,11 +247,29 @@ describe('HealthService', () => {
 
   describe('deleteHealthRecord', () => {
     it('should delete a health record by ID', async () => {
+      (prisma.healthRecord.findUnique as jest.Mock).mockResolvedValue(mockHealthRecord);
       (prisma.healthRecord.delete as jest.Mock).mockResolvedValue(mockHealthRecord);
 
       await HealthService.deleteHealthRecord('pet-1', 'record-1');
 
       expect(prisma.healthRecord.delete).toHaveBeenCalledWith({ where: { id: 'record-1' } });
+    });
+
+    it('should reject deleting a health record from another pet', async () => {
+      (prisma.healthRecord.findUnique as jest.Mock).mockResolvedValue({
+        ...mockHealthRecord,
+        petId: 'other-pet',
+      });
+
+      await expect(HealthService.deleteHealthRecord('pet-1', 'record-1')).rejects.toThrow('健康记录不存在');
+      expect(prisma.healthRecord.delete).not.toHaveBeenCalled();
+    });
+
+    it('should reject deleting a missing health record', async () => {
+      (prisma.healthRecord.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(HealthService.deleteHealthRecord('pet-1', 'missing-record')).rejects.toThrow('健康记录不存在');
+      expect(prisma.healthRecord.delete).not.toHaveBeenCalled();
     });
   });
 
@@ -297,11 +317,22 @@ describe('HealthService', () => {
 
     describe('deleteWeightRecord', () => {
       it('should delete a weight record', async () => {
+        (prisma.weightRecord.findUnique as jest.Mock).mockResolvedValue(mockWeightRecord);
         (prisma.weightRecord.delete as jest.Mock).mockResolvedValue({});
 
         await HealthService.deleteWeightRecord('pet-1', 'weight-1');
 
         expect(prisma.weightRecord.delete).toHaveBeenCalledWith({ where: { id: 'weight-1' } });
+      });
+
+      it('should reject deleting a weight record from another pet', async () => {
+        (prisma.weightRecord.findUnique as jest.Mock).mockResolvedValue({
+          ...mockWeightRecord,
+          petId: 'other-pet',
+        });
+
+        await expect(HealthService.deleteWeightRecord('pet-1', 'weight-1')).rejects.toThrow('体重记录不存在');
+        expect(prisma.weightRecord.delete).not.toHaveBeenCalled();
       });
     });
   });
