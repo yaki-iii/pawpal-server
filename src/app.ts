@@ -7,8 +7,7 @@ import { logger } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { apiRoutes } from './routes';
 import { prisma } from './config/database';
-
-const BUILD_ID = 'pawpal-v04-sos-hours-20260628';
+import { BUILD_ID } from './buildInfo';
 
 /**
  * Creates and configures the Express application.

@@ -55,3 +55,12 @@ describe('server startup', () => {
     expect(packageJson.scripts.start).toBe('node dist/index.js');
   });
 });
+
+describe('app health metadata', () => {
+  it('exposes the current v0.4 AI multimodal build id', async () => {
+    jest.resetModules();
+    const { BUILD_ID } = await import('../src/buildInfo');
+
+    expect(BUILD_ID).toBe('pawpal-v04-ai-image-notice-20260628');
+  });
+});
