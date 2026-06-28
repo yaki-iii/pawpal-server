@@ -30,6 +30,7 @@ describe('AlbumService', () => {
           id: 'moment-1',
           content: '今天去草地玩',
           images: ['/uploads/moment.jpg'],
+          videos: ['/uploads/moment-video.mp4'],
           createdAt: new Date('2026-06-20T12:00:00Z'),
         },
       ]);
@@ -60,6 +61,35 @@ describe('AlbumService', () => {
       );
       expect(album.groups[1].month).toBe('2026-05');
       expect(album.groups[1].items[0].type).toBe('health');
+      const momentItem = album.groups[0].items.find((item) => item.id === 'moment-1');
+      expect(momentItem?.imageUrls).toEqual(['/uploads/moment.jpg']);
+      expect(momentItem?.videoUrls).toEqual(['/uploads/moment-video.mp4']);
+    });
+
+    it('should include video-only moments in the album timeline', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue({ ...mockPet, birthday: null });
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'moment-video',
+          content: '第一次会翻滚',
+          images: [],
+          videos: ['/uploads/rollover.mp4'],
+          createdAt: new Date('2026-06-21T12:00:00Z'),
+        },
+      ]);
+      (prisma.healthRecord.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.growthDiaryEntry.findMany as jest.Mock).mockResolvedValue([]);
+
+      const album = await AlbumService.getPetAlbum('pet-1', 'user-1');
+
+      expect(album.groups).toHaveLength(1);
+      expect(album.groups[0].items[0]).toMatchObject({
+        id: 'moment-video',
+        type: 'moment',
+        title: '日常碎片',
+        imageUrls: [],
+        videoUrls: ['/uploads/rollover.mp4'],
+      });
     });
 
     it('should throw when pet does not exist', async () => {

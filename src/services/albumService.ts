@@ -8,6 +8,7 @@ export interface AlbumItemDTO {
   title: string;
   detail: string;
   imageUrls: string[];
+  videoUrls: string[];
   date: string;
 }
 
@@ -49,13 +50,15 @@ export class AlbumService {
     const items: AlbumItemDTO[] = [];
 
     for (const moment of moments) {
-      if (moment.images.length === 0) continue;
+      const videoUrls = (moment as { videos?: string[] }).videos || [];
+      if (moment.images.length === 0 && videoUrls.length === 0) continue;
       items.push({
         id: moment.id,
         type: 'moment',
         title: '日常碎片',
         detail: moment.content,
         imageUrls: moment.images,
+        videoUrls,
         date: moment.createdAt.toISOString(),
       });
     }
@@ -68,19 +71,20 @@ export class AlbumService {
         title: record.itemName || '健康记录',
         detail: record.notes || '健康记录图片',
         imageUrls: record.images,
+        videoUrls: [],
         date: record.date.toISOString(),
       });
     }
 
     for (const entry of diaryEntries) {
-      const mediaUrls = [...entry.photos, ...entry.videos];
-      if (mediaUrls.length === 0) continue;
+      if (entry.photos.length === 0 && entry.videos.length === 0) continue;
       items.push({
         id: entry.id,
         type: 'diary',
         title: entry.title || '成长日记',
         detail: entry.content,
-        imageUrls: mediaUrls,
+        imageUrls: entry.photos,
+        videoUrls: entry.videos,
         date: entry.createdAt.toISOString(),
       });
     }
@@ -93,6 +97,7 @@ export class AlbumService {
         title: `${pet.name} 的生日`,
         detail: '自动生成的成长里程碑',
         imageUrls: [],
+        videoUrls: [],
         date: birthday.toISOString(),
       });
     }
