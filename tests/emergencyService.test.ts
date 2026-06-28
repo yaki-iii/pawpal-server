@@ -27,6 +27,7 @@ jest.mock('../src/config', () => ({
     amap: {
       webServiceKey: 'test-amap-key',
       geocodeUrl: 'https://restapi.amap.com/v3/geocode/geo',
+      regeoUrl: 'https://restapi.amap.com/v3/geocode/regeo',
     },
   },
 }));
@@ -280,6 +281,49 @@ describe('EmergencyHelpService', () => {
       await expect(
         EmergencyHelpService.geocodeManualLocation('未知城市', '未知位置'),
       ).rejects.toThrow('未找到该位置');
+    });
+
+    it('should reverse geocode coordinates with AMap place names', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          regeocode: {
+            formatted_address: '广东省广州市天河区体育西路',
+            addressComponent: {
+              city: '广州市',
+              district: '天河区',
+            },
+          },
+        }),
+      });
+
+      const result = await EmergencyHelpService.reverseGeocodeLocation(23.1322, 113.3202);
+
+      expect(result).toEqual({
+        latitude: 23.1322,
+        longitude: 113.3202,
+        displayName: '广东省广州市天河区体育西路',
+        city: '广州市',
+        district: '天河区',
+      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('location=113.3202%2C23.1322'),
+      );
+    });
+
+    it('should throw instead of returning raw coordinates when reverse geocode has no name', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          regeocode: {},
+        }),
+      });
+
+      await expect(EmergencyHelpService.reverseGeocodeLocation(23.1322, 113.3202)).rejects.toThrow(
+        '未找到当前位置名称',
+      );
     });
 
     it('should return normalized AMap vets when AMap search succeeds', async () => {

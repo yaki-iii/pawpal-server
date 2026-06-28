@@ -82,6 +82,28 @@ export class EmergencyController {
   }
 
   /**
+   * GET /emergency/reverse-geocode — resolve coordinates to an AMap place name
+   */
+  static async reverseGeocode(req: Request, res: Response): Promise<void> {
+    try {
+      const lat = parseFloat(req.query.lat as string);
+      const lng = parseFloat(req.query.lng as string);
+
+      if (isNaN(lat) || isNaN(lng)) {
+        sendError(res, 400, '请提供有效的位置坐标');
+        return;
+      }
+
+      const location = await EmergencyHelpService.reverseGeocodeLocation(lat, lng);
+      sendSuccess(res, location);
+    } catch (error) {
+      const message = (error as Error).message;
+      const statusCode = message.includes('未找到') || message.includes('有效') ? 400 : 500;
+      sendError(res, statusCode, message);
+    }
+  }
+
+  /**
    * POST /emergency/:id/respond — respond to an emergency
    */
   static async respond(req: Request, res: Response): Promise<void> {

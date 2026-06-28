@@ -57,10 +57,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.4 AI multimodal build id', async () => {
+  it('exposes the current v0.4 reverse geocode build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v04-ai-image-notice-20260628');
+    expect(BUILD_ID).toBe('pawpal-v04-reverse-geocode-20260628');
   });
 });

@@ -45,6 +45,18 @@ interface AMapGeocodeResponse {
   geocodes?: AMapGeocode[];
 }
 
+interface AMapRegeocodeResponse {
+  status?: string;
+  info?: string;
+  regeocode?: {
+    formatted_address?: string;
+    addressComponent?: {
+      city?: string | string[];
+      district?: string | string[];
+    };
+  };
+}
+
 /**
  * EmergencyHelpService — emergency help requests for pet owners.
  *
@@ -240,6 +252,56 @@ export class EmergencyHelpService {
       }
       logger.warn(`AMap geocode unavailable: ${message}`);
       throw new Error('位置搜索失败，请稍后再试');
+    }
+  }
+
+  static async reverseGeocodeLocation(lat: number, lng: number): Promise<ManualLocationDTO> {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error('请提供有效的位置坐标');
+    }
+    if (!config.amap.webServiceKey) {
+      throw new Error('位置搜索服务暂不可用');
+    }
+
+    const params = new URLSearchParams({
+      key: config.amap.webServiceKey,
+      location: `${lng},${lat}`,
+      extensions: 'base',
+      radius: '1000',
+    });
+
+    try {
+      const response = await fetch(`${config.amap.regeoUrl}?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = (await response.json()) as AMapRegeocodeResponse;
+      if (data.status !== '1') {
+        logger.warn(`AMap reverse geocode failed: ${data.info || 'unknown error'}`);
+        throw new Error('位置名称解析失败，请稍后再试');
+      }
+
+      const regeocode = data.regeocode;
+      const displayName = EmergencyHelpService.cleanAMapText(regeocode?.formatted_address);
+      if (!displayName) {
+        throw new Error('未找到当前位置名称，请手动输入城市或地点');
+      }
+
+      return {
+        latitude: lat,
+        longitude: lng,
+        displayName,
+        city: EmergencyHelpService.firstAMapText(regeocode?.addressComponent?.city),
+        district: EmergencyHelpService.firstAMapText(regeocode?.addressComponent?.district),
+      };
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message.includes('未找到') || message.includes('有效') || message.includes('暂不可用')) {
+        throw error;
+      }
+      logger.warn(`AMap reverse geocode unavailable: ${message}`);
+      throw new Error('位置名称解析失败，请稍后再试');
     }
   }
 
