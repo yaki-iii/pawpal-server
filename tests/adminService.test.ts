@@ -422,7 +422,7 @@ describe('AdminService', () => {
         createdAt: new Date('2026-07-03T02:00:00Z'),
         updatedAt: new Date('2026-07-03T02:00:00Z'),
         user: { id: 'user-2', email: 'm@example.com', nickname: '日常用户', avatar: '' },
-        pet: { id: 'pet-1', name: '小白', avatar: '' },
+        pet: { id: 'pet-1', name: '小白', photo: 'pet.jpg' },
       }]);
 
       const result = await AdminService.listContent({ page: 1, pageSize: 20, status: 'ACTIVE' });
@@ -431,10 +431,17 @@ describe('AdminService', () => {
       expect(result.items.map((item) => item.type)).toEqual(['MOMENT', 'POST']);
       expect(prisma.post.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ isRemoved: false }),
+        include: expect.objectContaining({
+          pet: { select: { id: true, name: true, photo: true } },
+        }),
       }));
       expect(prisma.moment.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ isRemoved: false }),
+        include: expect.objectContaining({
+          pet: { select: { id: true, name: true, photo: true } },
+        }),
       }));
+      expect(result.items[0].pet).toEqual({ id: 'pet-1', name: '小白', avatar: 'pet.jpg' });
     });
 
     it('removes a post and writes an audit log', async () => {

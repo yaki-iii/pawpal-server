@@ -443,7 +443,7 @@ export class AdminService {
         take: windowSize,
         include: {
           author: { select: { id: true, email: true, nickname: true, avatar: true } },
-          pet: { select: { id: true, name: true, avatar: true } },
+          pet: { select: { id: true, name: true, photo: true } },
           circle: { select: { id: true, name: true } },
         },
       }),
@@ -456,7 +456,7 @@ export class AdminService {
         take: windowSize,
         include: {
           user: { select: { id: true, email: true, nickname: true, avatar: true } },
-          pet: { select: { id: true, name: true, avatar: true } },
+          pet: { select: { id: true, name: true, photo: true } },
         },
       }),
     ]);
@@ -668,7 +668,7 @@ export class AdminService {
     return {
       id: pet.id,
       name: pet.name,
-      avatar: pet.avatar,
+      avatar: pet.photo || '',
     };
   }
 }
