@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { llmClient } from './llmClient';
+import { arkVisionClient } from './arkVisionClient';
 import { AIService } from './aiService';
 import type { AIAssistantSessionDTO, AIResultCardDTO } from '../types';
 import type { AIAssistantSession } from '@prisma/client';
@@ -97,9 +98,26 @@ export class ChatService {
     }
     messages.push({ role: 'user', content: ChatService.buildUserPrompt(message, imageUrls) });
 
-    // Call LLM (with fallback to a short canned reply)
+    // Call Ark vision for image-assisted chat when configured, otherwise fall back
+    // to the existing text LLM path with an explicit image limitation notice.
     let assistantReply = '';
-    if (llmClient.isConfigured()) {
+    let usedVisionModel = false;
+    if (imageUrls.length > 0 && arkVisionClient.isConfigured()) {
+      try {
+        assistantReply = await arkVisionClient.analyzeImages({
+          systemPrompt,
+          history,
+          message,
+          imageUrls,
+        });
+        usedVisionModel = true;
+        logger.info(`Chat: Ark vision reply generated for conversation=${conversationId}`);
+      } catch (error) {
+        logger.warn(`Chat: Ark vision failed, falling back: ${(error as Error).message}`);
+      }
+    }
+
+    if (!assistantReply && llmClient.isConfigured()) {
       try {
         assistantReply = await llmClient.chat(messages, {
           temperature: 0.7,
@@ -111,9 +129,15 @@ export class ChatService {
         assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
       }
     } else {
-      assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
+      if (!assistantReply) {
+        assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
+      }
     }
-    assistantReply = ChatService.ensureImageLimitationNotice(assistantReply, imageUrls.length);
+    assistantReply = ChatService.normalizeAssistantReply(
+      usedVisionModel
+        ? assistantReply
+        : ChatService.ensureImageLimitationNotice(assistantReply, imageUrls.length),
+    );
 
     const resultCard = ChatService.buildResultCard(message, assistantReply, imageUrls);
     const assistantSources = resultCard ? [{ type: 'resultCard', card: resultCard }] : [];
@@ -239,7 +263,7 @@ export class ChatService {
       '1. 在社区发布求助帖获取宠主经验\n' +
       '2. 使用 /api/v1/ai/consult 接口获取搜索增强的回答\n' +
       '3. 如果是紧急情况，请使用 /api/v1/emergency/help 接口\n\n' +
-      '⚠️ 以上内容仅供参考，不构成专业兽医建议，复杂情况请及时就医。'
+      '⚠️ 以上内容仅供参考，不构成专业诊疗建议，复杂情况请及时联系动物医院。'
     );
   }
 
@@ -253,6 +277,19 @@ export class ChatService {
       '',
       `已收到 ${imageCount} 张图片。当前 AI 暂不能直接识别图片细节，请补充文字描述：部位、颜色/形态变化、持续时间、精神食欲、是否疼痛或出血。`,
     ].join('\n');
+  }
+
+  private static normalizeAssistantReply(reply: string): string {
+    return reply
+      .replace(/专业兽医建议/g, '专业诊疗建议')
+      .replace(/兽医诊所/g, '动物医院')
+      .replace(/兽医院/g, '动物医院')
+      .replace(/兽医电话/g, '动物医院电话')
+      .replace(/咨询兽医/g, '咨询动物医院')
+      .replace(/联系兽医/g, '联系动物医院')
+      .replace(/专业兽医/g, '专业医生')
+      .replace(/不是兽医/g, '不是动物医院医生')
+      .replace(/兽医/g, '动物医院');
   }
 
   private static buildUserPrompt(message: string, imageUrls: string[]): string {
@@ -300,8 +337,8 @@ export class ChatService {
       ],
       shouldSeeVet,
       vetReminder: shouldSeeVet
-        ? '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系兽医。'
-        : '如症状持续超过 24-48 小时或出现精神食欲下降，请咨询兽医。',
+        ? '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系动物医院。'
+        : '如症状持续超过 24-48 小时或出现精神食欲下降，请咨询动物医院。',
     };
   }
 

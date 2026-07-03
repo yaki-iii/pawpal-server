@@ -1,6 +1,7 @@
 import { ChatService } from '../src/services/chatService';
 import { prisma } from '../src/config/database';
 import { llmClient } from '../src/services/llmClient';
+import { arkVisionClient } from '../src/services/arkVisionClient';
 
 // Mock Prisma
 jest.mock('../src/config/database', () => ({
@@ -42,6 +43,13 @@ jest.mock('../src/services/llmClient', () => ({
   llmClient: {
     isConfigured: jest.fn(),
     chat: jest.fn(),
+  },
+}));
+
+jest.mock('../src/services/arkVisionClient', () => ({
+  arkVisionClient: {
+    isConfigured: jest.fn(),
+    analyzeImages: jest.fn(),
   },
 }));
 
@@ -297,6 +305,55 @@ describe('ChatService', () => {
       expect(messages[messages.length - 1].content).toContain('请看看这两张照片');
     });
 
+    it('should use Ark vision when images are attached and Ark is configured', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (prisma.aIAssistantSession.create as jest.Mock)
+        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
+        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+      (arkVisionClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (arkVisionClient.analyzeImages as jest.Mock).mockResolvedValue('我已经查看图片：眼周明显发红，建议保持清洁并观察分泌物。');
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+
+      await ChatService.chat({
+        userId: 'user-1',
+        message: '请看看眼睛照片',
+        imageUrls,
+      });
+
+      expect(arkVisionClient.analyzeImages).toHaveBeenCalledWith({
+        systemPrompt: 'system prompt',
+        history: [],
+        message: '请看看眼睛照片',
+        imageUrls,
+      });
+      expect(llmClient.chat).not.toHaveBeenCalled();
+      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
+      expect(assistantCall.summary).toContain('我已经查看图片');
+      expect(assistantCall.summary).not.toContain('当前 AI 暂不能直接识别图片细节');
+    });
+
+    it('should fall back with a clear limitation notice when Ark vision fails', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (prisma.aIAssistantSession.create as jest.Mock)
+        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
+        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+      (arkVisionClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (arkVisionClient.analyzeImages as jest.Mock).mockRejectedValue(new Error('Ark timeout'));
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(false);
+
+      await ChatService.chat({
+        userId: 'user-1',
+        message: '请看看眼睛照片',
+        imageUrls,
+      });
+
+      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
+      expect(assistantCall.summary).toContain('AI 服务暂时不可用');
+      expect(assistantCall.summary).toContain('当前模型暂不能直接识别图片内容');
+    });
+
     it('should always include a clear image limitation notice when images are attached', async () => {
       const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
       (prisma.aIAssistantSession.create as jest.Mock)
@@ -344,7 +401,7 @@ describe('ChatService', () => {
             possibleCauses: expect.arrayContaining(['眼部刺激或炎症']),
             suggestions: expect.arrayContaining(['记录图片变化，观察 24 小时内是否加重']),
             shouldSeeVet: true,
-            vetReminder: '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系兽医。',
+            vetReminder: '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系动物医院。',
           },
         },
       ]);
@@ -486,6 +543,29 @@ describe('ChatService', () => {
       // Should contain only the first 50 chars
       expect(reply).toContain('我'.repeat(50));
       expect(reply).not.toContain('我'.repeat(51));
+    });
+  });
+
+  describe('normalizeAssistantReply', () => {
+    it('should normalize old vet wording before storing AI replies', async () => {
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (llmClient.chat as jest.Mock).mockResolvedValue('请尽快咨询兽医，并拨打附近兽医电话。');
+      (prisma.aIAssistantSession.create as jest.Mock)
+        .mockResolvedValueOnce(mockUserMessage)
+        .mockResolvedValueOnce({
+          ...mockAssistantMessage,
+          summary: '请尽快咨询动物医院，并拨打附近动物医院电话。',
+        });
+      (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+
+      await ChatService.chat({
+        userId: 'user-1',
+        message: '眼睛红肿怎么办',
+      });
+
+      const assistantCreate = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
+      expect(assistantCreate.summary).toContain('动物医院');
+      expect(assistantCreate.summary).not.toContain('兽医');
     });
   });
 });

@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { llmClient } from './llmClient';
+import { arkVisionClient } from './arkVisionClient';
 import { SearchService } from './searchService';
 import { WebSearchService, type WebSearchResult } from './webSearchService';
 import type { AIAssistantSessionDTO, AISource } from '../types';
@@ -21,10 +22,10 @@ const SYSTEM_PROMPT = `你是 PawPal 爪友的宠物经验总结助手，提供�
 3. 引用信息时标注来源，如"据社区宠主分享"、"据小红书经验"、"据抖音视频"等
 4. 不要编造没有搜索结果支撑的信息，如果搜索结果不足，坦诚说明
 5. 不提供医疗诊断，不给出具体用药剂量
-6. 不替代兽医的专业建议
+6. 不替代动物医院的专业诊疗建议
 7. 如果问题涉及紧急情况（如大量出血、呼吸困难、严重外伤），建议用户立即就医
 
-请始终记住：你是经验总结助手，不是兽医。所有建议仅供参考。`;
+请始终记住：你是经验总结助手，不是动物医院医生。所有建议仅供参考。`;
 
 /**
  * Question type categories for classification.
@@ -37,7 +38,7 @@ const QUESTION_CATEGORIES = [
 /**
  * Fixed disclaimer text — appended to every AI response.
  */
-const DISCLAIMER = '以上内容来自社区、知识库和网络公开信息总结，仅供参考，不构成专业兽医建议，复杂情况请及时就医。';
+const DISCLAIMER = '以上内容来自社区、知识库和网络公开信息总结，仅供参考，不构成专业诊疗建议，复杂情况请及时联系动物医院。';
 
 /**
  * AIService — orchestrates the multi-source AI consultation pipeline:
@@ -114,28 +115,46 @@ export class AIService {
       })),
     ];
 
-    // Step 3: Summarize (LLM summarization with multi-source context)
+    // Step 3: Summarize (Ark vision first for image questions, then text LLM fallback)
     let summary = '';
-    if (llmClient.isConfigured()) {
+    if (imageUrls.length > 0 && arkVisionClient.isConfigured()) {
       try {
-        const contextText = AIService.buildContextText(
-          question,
-          searchResults.posts,
-          webResults,
-        );
-        const messages: Array<{ role: 'system' | 'user'; content: string }> = [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: contextText },
-        ];
-        summary = await llmClient.chat(messages, { temperature: 0.7, maxTokens: 1000 });
-        logger.info('AI summary generated successfully');
+        summary = await arkVisionClient.analyzeImages({
+          systemPrompt: SYSTEM_PROMPT,
+          history: [],
+          message: AIService.buildContextText(question, searchResults.posts, webResults),
+          imageUrls,
+        });
+        logger.info('AI image summary generated successfully with Ark vision');
       } catch (error) {
-        logger.warn(`AI summary failed, using fallback: ${(error as Error).message}`);
-        summary = AIService.buildFallbackSummary(searchResults.posts, webResults);
+        logger.warn(`AI image summary failed, falling back to text summary: ${(error as Error).message}`);
+      }
+    }
+
+    if (llmClient.isConfigured()) {
+      if (!summary) {
+        try {
+          const contextText = AIService.buildContextText(
+            question,
+            searchResults.posts,
+            webResults,
+          );
+          const messages: Array<{ role: 'system' | 'user'; content: string }> = [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: contextText },
+          ];
+          summary = await llmClient.chat(messages, { temperature: 0.7, maxTokens: 1000 });
+          logger.info('AI summary generated successfully');
+        } catch (error) {
+          logger.warn(`AI summary failed, using fallback: ${(error as Error).message}`);
+          summary = AIService.buildFallbackSummary(searchResults.posts, webResults);
+        }
       }
     } else {
       // LLM not configured — use fallback summary from search results
-      summary = AIService.buildFallbackSummary(searchResults.posts, webResults);
+      if (!summary) {
+        summary = AIService.buildFallbackSummary(searchResults.posts, webResults);
+      }
     }
 
     // Step 4: Assemble result + disclaimer

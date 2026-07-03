@@ -42,6 +42,12 @@ export const config = {
     model: process.env.LLM_MODEL || 'deepseek-chat',
   },
 
+  ark: {
+    apiKey: process.env.ARK_API_KEY || '',
+    baseUrl: process.env.ARK_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3',
+    visionModel: process.env.ARK_VISION_MODEL || 'doubao-seed-2-1-pro-260628',
+  },
+
   amap: {
     webServiceKey: process.env.AMAP_WEB_SERVICE_KEY || '',
     placeAroundUrl: process.env.AMAP_PLACE_AROUND_URL || 'https://restapi.amap.com/v3/place/around',

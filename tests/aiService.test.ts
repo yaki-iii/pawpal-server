@@ -21,6 +21,11 @@ jest.mock('../src/config', () => ({
       baseUrl: 'https://api.deepseek.com/v1',
       model: 'deepseek-chat',
     },
+    ark: {
+      apiKey: 'ark-test-key',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      visionModel: 'doubao-seed-2-1-pro-260628',
+    },
     encryption: { key: 'test-encryption-key-32bytes-ok!!!' },
   },
 }));
@@ -58,11 +63,19 @@ jest.mock('../src/services/webSearchService', () => ({
   },
 }));
 
+jest.mock('../src/services/arkVisionClient', () => ({
+  arkVisionClient: {
+    isConfigured: jest.fn(),
+    analyzeImages: jest.fn(),
+  },
+}));
+
 import { llmClient } from '../src/services/llmClient';
 import { SearchService } from '../src/services/searchService';
 import { WebSearchService } from '../src/services/webSearchService';
+import { arkVisionClient } from '../src/services/arkVisionClient';
 
-const DISCLAIMER = '以上内容来自社区、知识库和网络公开信息总结，仅供参考，不构成专业兽医建议，复杂情况请及时就医。';
+const DISCLAIMER = '以上内容来自社区、知识库和网络公开信息总结，仅供参考，不构成专业诊疗建议，复杂情况请及时联系动物医院。';
 
 const mockSession = {
   id: 'session-1',
@@ -168,6 +181,70 @@ describe('AIService', () => {
       expect(createData.sources[0].url).toBe('/posts/p1');
       expect(createData.sources[2].type).toBe('web');
       expect(createData.sources[2].url).toBe('https://example.com/1');
+    });
+
+    it('should use Ark vision for attached images instead of text-only summarization', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (llmClient.classify as jest.Mock).mockResolvedValue('眼部问题');
+      (arkVisionClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (arkVisionClient.analyzeImages as jest.Mock).mockResolvedValue('图片显示眼周偏红，建议先保持清洁并观察分泌物变化。');
+      (SearchService.searchAll as jest.Mock).mockResolvedValue({ posts: [] });
+      (WebSearchService.search as jest.Mock).mockResolvedValue([]);
+      (prisma.aIAssistantSession.create as jest.Mock).mockResolvedValue({
+        ...mockSession,
+        imageUrls,
+        question: '帮我看下眼睛照片',
+        questionType: '眼部问题',
+        summary: '图片显示眼周偏红，建议先保持清洁并观察分泌物变化。\n\n⚠️ ' + DISCLAIMER,
+      });
+
+      await AIService.runPipeline({
+        userId: 'user-1',
+        question: '帮我看下眼睛照片',
+        imageUrls,
+      });
+
+      expect(arkVisionClient.analyzeImages).toHaveBeenCalledWith({
+        systemPrompt: AIService.getSystemPrompt(),
+        history: [],
+        message: expect.stringContaining('帮我看下眼睛照片'),
+        imageUrls,
+      });
+      expect(llmClient.chat).not.toHaveBeenCalled();
+      const createData = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[0][0].data;
+      expect(createData.summary).toContain('图片显示眼周偏红');
+      expect(createData.summary).toContain(DISCLAIMER);
+    });
+
+    it('should fall back to text summary when Ark vision fails for attached images', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (llmClient.classify as jest.Mock).mockResolvedValue('眼部问题');
+      (arkVisionClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (arkVisionClient.analyzeImages as jest.Mock).mockRejectedValue(new Error('Ark timeout'));
+      (llmClient.chat as jest.Mock).mockResolvedValue('文字总结：请补充红肿持续时间。');
+      (SearchService.searchAll as jest.Mock).mockResolvedValue({ posts: [] });
+      (WebSearchService.search as jest.Mock).mockResolvedValue([]);
+      (prisma.aIAssistantSession.create as jest.Mock).mockResolvedValue({
+        ...mockSession,
+        imageUrls,
+        question: '帮我看下眼睛照片',
+        questionType: '眼部问题',
+        summary: '文字总结：请补充红肿持续时间。\n\n⚠️ ' + DISCLAIMER,
+      });
+
+      await AIService.runPipeline({
+        userId: 'user-1',
+        question: '帮我看下眼睛照片',
+        imageUrls,
+      });
+
+      expect(arkVisionClient.analyzeImages).toHaveBeenCalled();
+      expect(llmClient.chat).toHaveBeenCalled();
+      const createData = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[0][0].data;
+      expect(createData.summary).toContain('文字总结');
+      expect(createData.imageUrls).toEqual(imageUrls);
     });
   });
 
@@ -366,8 +443,8 @@ describe('AIService', () => {
       const disclaimer = AIService.buildDisclaimer();
       expect(disclaimer).toBe(DISCLAIMER);
       expect(disclaimer).toContain('仅供参考');
-      expect(disclaimer).toContain('不构成专业兽医建议');
-      expect(disclaimer).toContain('请及时就医');
+      expect(disclaimer).toContain('不构成专业诊疗建议');
+      expect(disclaimer).toContain('请及时联系动物医院');
     });
   });
 
