@@ -19,6 +19,26 @@ export class PetService {
     return pets.map(PetService.toDTO);
   }
 
+  static async listVisibleByUser(ownerId: string, viewerId?: string): Promise<PetDTO[]> {
+    const owner = await prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { id: true, petVisibility: true, deletedAt: true },
+    });
+    if (!owner || owner.deletedAt) {
+      throw new Error('用户不存在');
+    }
+
+    if (!(await PetService.canViewPets(ownerId, owner.petVisibility, viewerId))) {
+      return [];
+    }
+
+    const pets = await prisma.pet.findMany({
+      where: { userId: ownerId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return pets.map(PetService.toDTO);
+  }
+
   /**
    * Get a single pet by ID.
    * Verifies ownership.
@@ -148,5 +168,22 @@ export class PetService {
       createdAt: pet.createdAt.toISOString(),
       updatedAt: pet.updatedAt.toISOString(),
     };
+  }
+
+  private static async canViewPets(
+    ownerId: string,
+    visibility: string,
+    viewerId?: string,
+  ): Promise<boolean> {
+    if (viewerId === ownerId) return true;
+    if (visibility === 'PUBLIC') return true;
+    if (visibility === 'PRIVATE') return false;
+    if (!viewerId) return false;
+    if (visibility !== 'FOLLOWERS') return true;
+
+    const follow = await prisma.follow.findUnique({
+      where: { followerId_followeeId: { followerId: viewerId, followeeId: ownerId } },
+    });
+    return !!follow;
   }
 }

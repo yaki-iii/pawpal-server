@@ -46,6 +46,9 @@ router.get('/:userId/posts', UserController.getUserPosts);
 // Moments by user — public (optional auth for visibility filtering)
 router.get('/:userId/moments', optionalAuth, UserController.getUserMoments);
 
+// Pets by user — public with privacy filtering
+router.get('/:userId/pets', optionalAuth, UserController.getUserPets);
+
 // Liked posts as favorites MVP — private
 router.get('/:userId/liked-posts', requireAuth, UserController.getLikedPosts);
 router.get('/:userId/favorites', requireAuth, UserController.getFavorites);

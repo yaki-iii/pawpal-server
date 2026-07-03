@@ -11,6 +11,8 @@ jest.mock('../src/config/database', () => ({
       update: jest.fn(),
       delete: jest.fn(),
     },
+    user: { findUnique: jest.fn() },
+    follow: { findUnique: jest.fn() },
   },
 }));
 
@@ -78,6 +80,52 @@ describe('PetService', () => {
       const pets = await PetService.listByUser('user-1');
       expect(typeof pets[0].createdAt).toBe('string');
       expect(typeof pets[0].birthday).toBe('string');
+    });
+  });
+
+  describe('listVisibleByUser', () => {
+    it('should list public pets for another viewer', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', petVisibility: 'PUBLIC' });
+      (prisma.pet.findMany as jest.Mock).mockResolvedValue([mockPet]);
+
+      const pets = await PetService.listVisibleByUser('user-1', 'viewer-1');
+
+      expect(pets).toHaveLength(1);
+      expect(prisma.pet.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: { createdAt: 'asc' },
+      });
+    });
+
+    it('should hide follower-only pets from non-followers', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', petVisibility: 'FOLLOWERS' });
+      (prisma.follow.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const pets = await PetService.listVisibleByUser('user-1', 'viewer-1');
+
+      expect(pets).toEqual([]);
+      expect(prisma.pet.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should show follower-only pets to followers', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', petVisibility: 'FOLLOWERS' });
+      (prisma.follow.findUnique as jest.Mock).mockResolvedValue({ id: 'follow-1' });
+      (prisma.pet.findMany as jest.Mock).mockResolvedValue([mockPet]);
+
+      const pets = await PetService.listVisibleByUser('user-1', 'viewer-1');
+
+      expect(pets).toHaveLength(1);
+    });
+
+    it('should only show private pets to the owner', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'user-1', petVisibility: 'PRIVATE' });
+
+      const hidden = await PetService.listVisibleByUser('user-1', 'viewer-1');
+      expect(hidden).toEqual([]);
+
+      (prisma.pet.findMany as jest.Mock).mockResolvedValue([mockPet]);
+      const ownPets = await PetService.listVisibleByUser('user-1', 'user-1');
+      expect(ownPets).toHaveLength(1);
     });
   });
 

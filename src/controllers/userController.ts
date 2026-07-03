@@ -3,6 +3,7 @@ import { CommunityService } from '../services/communityService';
 import { NotificationService } from '../services/notificationService';
 import { DataPrivacyService } from '../services/dataPrivacyService';
 import { ProfileContentService } from '../services/profileContentService';
+import { PetService } from '../services/petService';
 import { prisma } from '../config/database';
 import { sendSuccess, sendError } from '../middleware/error';
 import { logger } from '../utils/logger';
@@ -116,6 +117,18 @@ export class UserController {
       sendSuccess(res, moments);
     } catch (error) {
       sendError(res, 500, (error as Error).message);
+    }
+  }
+
+  /**
+   * GET /users/:userId/pets — visible pets by user privacy settings.
+   */
+  static async getUserPets(req: Request, res: Response): Promise<void> {
+    try {
+      const pets = await PetService.listVisibleByUser(req.params.userId, req.userId);
+      sendSuccess(res, pets);
+    } catch (error) {
+      sendError(res, 404, (error as Error).message, undefined, 404);
     }
   }
 
