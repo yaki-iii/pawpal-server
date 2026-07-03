@@ -28,6 +28,14 @@ const paginationQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
+const auditLogsQuerySchema = paginationQuerySchema.extend({
+  action: z.string().optional(),
+  targetType: z.string().optional(),
+  adminUserId: z.string().optional(),
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
+});
+
 const listContentQuerySchema = paginationQuerySchema.extend({
   type: z.enum(['POST', 'MOMENT', 'COMMENT', 'MOMENT_COMMENT', 'CIRCLE']).optional(),
   status: z.enum(['ACTIVE', 'REMOVED']).optional(),
@@ -128,7 +136,7 @@ router.get(
   '/audit-logs',
   requireAdmin,
   requireAdminRole(['SUPER_ADMIN']),
-  validateQuery(paginationQuerySchema),
+  validateQuery(auditLogsQuerySchema),
   AdminController.listAuditLogs,
 );
 

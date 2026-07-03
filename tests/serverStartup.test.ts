@@ -67,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.6 report detail build id', async () => {
+  it('exposes the current v0.6 audit filters build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v06-report-detail-20260704');
+    expect(BUILD_ID).toBe('pawpal-v06-audit-filters-20260704');
   });
 });

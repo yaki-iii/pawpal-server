@@ -339,5 +339,37 @@ describe('admin HTTP layer', () => {
         message: 'success',
       });
     });
+
+    it('passes audit log filters to admin service', async () => {
+      (AdminService.listAuditLogs as jest.Mock).mockResolvedValue({
+        items: [],
+        meta: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
+      });
+      const req = {
+        query: {
+          page: '1',
+          pageSize: '20',
+          action: 'USER_SUSPEND',
+          targetType: 'USER',
+          adminUserId: 'admin-1',
+          dateFrom: '2026-07-03T00:00:00.000Z',
+          dateTo: '2026-07-04T00:00:00.000Z',
+        },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.listAuditLogs(req, res);
+
+      expect(AdminService.listAuditLogs).toHaveBeenCalledWith({
+        page: 1,
+        pageSize: 20,
+        action: 'USER_SUSPEND',
+        targetType: 'USER',
+        adminUserId: 'admin-1',
+        dateFrom: '2026-07-03T00:00:00.000Z',
+        dateTo: '2026-07-04T00:00:00.000Z',
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
   });
 });

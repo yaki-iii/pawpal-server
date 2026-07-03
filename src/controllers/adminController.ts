@@ -136,6 +136,11 @@ export class AdminController {
       const result = await AdminService.listAuditLogs({
         page: Number(req.query.page || 1),
         pageSize: Number(req.query.pageSize || 20),
+        action: typeof req.query.action === 'string' ? req.query.action : undefined,
+        targetType: typeof req.query.targetType === 'string' ? req.query.targetType : undefined,
+        adminUserId: typeof req.query.adminUserId === 'string' ? req.query.adminUserId : undefined,
+        dateFrom: typeof req.query.dateFrom === 'string' ? req.query.dateFrom : undefined,
+        dateTo: typeof req.query.dateTo === 'string' ? req.query.dateTo : undefined,
       });
       sendSuccess(res, result);
     } catch (error) {

@@ -77,6 +77,16 @@ interface HandleReportInput {
   note: string;
 }
 
+interface ListAuditLogsQuery {
+  page?: number;
+  pageSize?: number;
+  action?: string;
+  targetType?: string;
+  adminUserId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}
+
 /**
  * AdminService owns the first management-backend slice: bootstrap, login,
  * dashboard counts, user account actions, and audit logging.
@@ -458,15 +468,26 @@ export class AdminService {
     return after as Record<string, unknown>;
   }
 
-  static async listAuditLogs(query: { page?: number; pageSize?: number } = {}): Promise<{
+  static async listAuditLogs(query: ListAuditLogsQuery = {}): Promise<{
     items: unknown[];
     meta: { page: number; pageSize: number; total: number; totalPages: number };
   }> {
     const page = Math.max(1, query.page || 1);
     const pageSize = Math.min(100, Math.max(1, query.pageSize || 20));
+    const where: Record<string, unknown> = {};
+    if (query.action?.trim()) where.action = query.action.trim();
+    if (query.targetType?.trim()) where.targetType = query.targetType.trim();
+    if (query.adminUserId?.trim()) where.adminUserId = query.adminUserId.trim();
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {
+        ...(query.dateFrom ? { gte: new Date(query.dateFrom) } : {}),
+        ...(query.dateTo ? { lte: new Date(query.dateTo) } : {}),
+      };
+    }
     const [total, items] = await Promise.all([
-      prisma.adminAuditLog.count(),
+      prisma.adminAuditLog.count({ where }),
       prisma.adminAuditLog.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,

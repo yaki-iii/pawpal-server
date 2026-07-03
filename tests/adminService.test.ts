@@ -411,6 +411,52 @@ describe('AdminService', () => {
     });
   });
 
+  describe('listAuditLogs', () => {
+    it('applies action, target, admin and date filters', async () => {
+      const createdAt = new Date('2026-07-03T08:00:00Z');
+      (prisma.adminAuditLog.count as jest.Mock).mockResolvedValue(1);
+      (prisma.adminAuditLog.findMany as jest.Mock).mockResolvedValue([{
+        id: 'audit-1',
+        adminUserId: 'admin-1',
+        action: 'USER_SUSPEND',
+        targetType: 'USER',
+        targetId: 'user-1',
+        reason: '违规',
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+        createdAt,
+      }]);
+
+      const result = await AdminService.listAuditLogs({
+        page: 1,
+        pageSize: 20,
+        action: 'USER_SUSPEND',
+        targetType: 'USER',
+        adminUserId: 'admin-1',
+        dateFrom: '2026-07-03T00:00:00.000Z',
+        dateTo: '2026-07-04T00:00:00.000Z',
+      });
+
+      const where = {
+        action: 'USER_SUSPEND',
+        targetType: 'USER',
+        adminUserId: 'admin-1',
+        createdAt: {
+          gte: new Date('2026-07-03T00:00:00.000Z'),
+          lte: new Date('2026-07-04T00:00:00.000Z'),
+        },
+      };
+      expect(result.meta.total).toBe(1);
+      expect(prisma.adminAuditLog.count).toHaveBeenCalledWith({ where });
+      expect(prisma.adminAuditLog.findMany).toHaveBeenCalledWith({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: 0,
+        take: 20,
+      });
+    });
+  });
+
   describe('suspendUser and unsuspendUser', () => {
     const actor = {
       id: 'admin-1',
