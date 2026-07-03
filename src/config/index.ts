@@ -37,6 +37,7 @@ export const config = {
   admin: {
     bootstrapEmail: process.env.ADMIN_BOOTSTRAP_EMAIL || '',
     bootstrapPassword: process.env.ADMIN_BOOTSTRAP_PASSWORD || '',
+    bootstrapResetPassword: process.env.ADMIN_BOOTSTRAP_RESET_PASSWORD === 'true',
     jwtSecret: process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'admin-fallback-secret-change-me',
     jwtExpiresIn: process.env.ADMIN_JWT_EXPIRES_IN || '12h',
     panelOrigin: process.env.ADMIN_PANEL_ORIGIN || '',

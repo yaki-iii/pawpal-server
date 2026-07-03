@@ -37,6 +37,7 @@ jest.mock('../src/config', () => ({
     admin: {
       bootstrapEmail: 'yaki_meng@163.com',
       bootstrapPassword: 'bootstrap-secret',
+      bootstrapResetPassword: false,
       jwtSecret: 'test-admin-jwt-secret',
       jwtExpiresIn: '12h',
       panelOrigin: 'https://admin.example.com',
@@ -55,6 +56,7 @@ jest.mock('../src/utils/logger', () => ({
 
 import { AdminService } from '../src/services/adminService';
 import { prisma } from '../src/config/database';
+import { config } from '../src/config';
 
 describe('AdminService', () => {
   const activeSuperAdmin = {
@@ -71,6 +73,7 @@ describe('AdminService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    config.admin.bootstrapResetPassword = false;
   });
 
   describe('bootstrapSuperAdmin', () => {
@@ -106,6 +109,28 @@ describe('AdminService', () => {
 
       expect(admin).toBeNull();
       expect(prisma.adminUser.create).not.toHaveBeenCalled();
+    });
+
+    it('resets the bootstrap admin password only when the reset flag is enabled', async () => {
+      config.admin.bootstrapResetPassword = true;
+      (prisma.adminUser.count as jest.Mock).mockResolvedValue(1);
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(activeSuperAdmin);
+      (prisma.adminUser.update as jest.Mock).mockImplementation(async ({ data }) => ({
+        ...activeSuperAdmin,
+        ...data,
+        updatedAt: new Date('2026-07-03T02:00:00Z'),
+      }));
+
+      const admin = await AdminService.bootstrapSuperAdmin();
+
+      expect(admin?.email).toBe('yaki_meng@163.com');
+      expect(prisma.adminUser.update).toHaveBeenCalledWith({
+        where: { id: 'admin-1' },
+        data: expect.objectContaining({
+          passwordHash: expect.not.stringContaining('bootstrap-secret'),
+          status: 'ACTIVE',
+        }),
+      });
     });
   });
 

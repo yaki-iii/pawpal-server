@@ -76,14 +76,40 @@ export class AdminService {
   }
 
   static async bootstrapSuperAdmin(): Promise<AdminDTO | null> {
-    const existingCount = await prisma.adminUser.count();
-    if (existingCount > 0) {
-      return null;
-    }
-
     if (!config.admin.bootstrapEmail || !config.admin.bootstrapPassword) {
       logger.warn('Admin bootstrap skipped: ADMIN_BOOTSTRAP_EMAIL or ADMIN_BOOTSTRAP_PASSWORD is missing.');
       return null;
+    }
+
+    const existingCount = await prisma.adminUser.count();
+    if (existingCount > 0) {
+      if (!config.admin.bootstrapResetPassword) {
+        return null;
+      }
+
+      const existingAdmin = await prisma.adminUser.findUnique({
+        where: { email: config.admin.bootstrapEmail },
+      });
+      if (!existingAdmin) {
+        logger.warn('Admin password reset skipped: bootstrap email does not match an existing admin.');
+        return null;
+      }
+
+      const passwordHash = await AdminService.hashPassword(config.admin.bootstrapPassword);
+      const admin = await prisma.adminUser.update({
+        where: { id: existingAdmin.id },
+        data: {
+          passwordHash,
+          status: 'ACTIVE',
+        },
+      });
+
+      logger.warn(`Bootstrap admin password reset for: ${admin.email}`);
+      return AdminService.toDTO(admin);
+    }
+
+    if (config.admin.bootstrapResetPassword) {
+      logger.warn('Admin password reset flag ignored during first bootstrap because no admin exists yet.');
     }
 
     const passwordHash = await AdminService.hashPassword(config.admin.bootstrapPassword);
