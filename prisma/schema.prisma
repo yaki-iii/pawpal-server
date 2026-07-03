@@ -67,6 +67,24 @@ enum MembershipLevel {
   PREMIUM
 }
 
+enum UserAccountStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  OPS_ADMIN
+  CONTENT_MODERATOR
+  SUPPORT
+  READONLY
+}
+
+enum AdminStatus {
+  ACTIVE
+  DISABLED
+}
+
 // Reddit-style circle enums
 enum CircleVisibility {
   PUBLIC     // 任何人可浏览和发帖
@@ -97,6 +115,9 @@ model User {
   bio             String          @default("")
   city            String          @default("")
   membershipLevel MembershipLevel @default(FREE)
+  accountStatus   UserAccountStatus @default(ACTIVE)
+  suspendedUntil  DateTime?
+  suspendedReason String          @default("")
   deletedAt       DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -560,4 +581,44 @@ model VetClinic {
 
   @@index([lat, lng])
   @@map("vet_clinics")
+}
+
+// ==================== Admin (管理后台) ====================
+
+model AdminUser {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  name         String      @default("")
+  role         AdminRole   @default(READONLY)
+  status       AdminStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  auditLogs AdminAuditLog[]
+
+  @@index([role, status])
+  @@map("admin_users")
+}
+
+model AdminAuditLog {
+  id             String   @id @default(cuid())
+  adminUserId    String?
+  action         String
+  targetType     String
+  targetId       String   @default("")
+  reason         String   @default("")
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  ipAddress      String   @default("")
+  userAgent      String   @default("")
+  createdAt      DateTime @default(now())
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId, createdAt])
+  @@index([targetType, targetId])
+  @@index([action, createdAt])
+  @@map("admin_audit_logs")
 }

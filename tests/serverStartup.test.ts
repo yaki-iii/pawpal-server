@@ -5,6 +5,7 @@ describe('server startup', () => {
   });
   const appMock = { listen: listenMock };
   const runStartupMigrationsMock = jest.fn();
+  const bootstrapSuperAdminMock = jest.fn();
 
   beforeEach(() => {
     jest.resetModules();
@@ -25,9 +26,14 @@ describe('server startup', () => {
     jest.doMock('../src/utils/startupMigration', () => ({
       runStartupMigrations: runStartupMigrationsMock,
     }));
+    jest.doMock('../src/services/adminService', () => ({
+      AdminService: {
+        bootstrapSuperAdmin: bootstrapSuperAdminMock,
+      },
+    }));
   });
 
-  it('opens the web port before startup migrations finish', async () => {
+  it('opens the web port before startup migrations finish and bootstraps admin after guards', async () => {
     let migrationsFinished = false;
     let resolveMigrations: () => void = () => {};
     runStartupMigrationsMock.mockImplementation(
@@ -45,8 +51,12 @@ describe('server startup', () => {
     expect(listenMock).toHaveBeenCalledWith(4321, expect.any(Function));
     expect(runStartupMigrationsMock).toHaveBeenCalledTimes(1);
     expect(migrationsFinished).toBe(false);
+    expect(bootstrapSuperAdminMock).not.toHaveBeenCalled();
 
     resolveMigrations();
+    await new Promise(process.nextTick);
+
+    expect(bootstrapSuperAdminMock).toHaveBeenCalledTimes(1);
   });
 
   it('starts the web process without blocking on prisma migrate deploy', () => {
@@ -57,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.4 album management build id', async () => {
+  it('exposes the current v0.6 admin build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v04-album-management-20260703');
+    expect(BUILD_ID).toBe('pawpal-v06-admin-m1-20260703');
   });
 });

@@ -198,6 +198,20 @@ describe('AuthService', () => {
         AuthService.login('user@example.com', 'correctpass'),
       ).rejects.toThrow('该账号已被注销');
     });
+
+    it('should throw error if account is suspended by an admin', async () => {
+      const suspendedUser = {
+        ...mockUser,
+        accountStatus: 'SUSPENDED',
+        suspendedReason: '垃圾广告',
+        suspendedUntil: new Date('2026-07-10T00:00:00Z'),
+      };
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(suspendedUser);
+
+      await expect(
+        AuthService.login('user@example.com', 'correctpass'),
+      ).rejects.toThrow('该账号已被冻结');
+    });
   });
 
   describe('getUserById', () => {

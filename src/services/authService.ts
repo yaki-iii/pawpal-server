@@ -74,6 +74,10 @@ export class AuthService {
       throw new Error('该账号已被注销');
     }
 
+    if (user.accountStatus === 'SUSPENDED') {
+      throw new Error('该账号已被冻结');
+    }
+
     const valid = await AuthService.verifyPassword(password, user.passwordHash);
     if (!valid) {
       throw new Error('邮箱或密码错误');

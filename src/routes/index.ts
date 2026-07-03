@@ -10,6 +10,7 @@ import { petMomentRoutes, momentRoutes, momentFeedRoutes } from './momentRoutes'
 import emergencyRoutes from './emergencyRoutes';
 import uploadRoutes from './uploadRoutes';
 import searchRoutes from './searchRoutes';
+import adminRoutes from './adminRoutes';
 import { generalRateLimiter } from '../middleware/rateLimit';
 
 const router = Router();
@@ -33,5 +34,6 @@ router.use('/search', searchRoutes); // /search?q=...
 router.use('/ai', aiRoutes);
 router.use('/reminders', reminderRoutes); // /reminders, /reminders/:id, etc.
 router.use('/emergency', emergencyRoutes); // /emergency/help, /emergency/vets, etc.
+router.use('/admin', adminRoutes); // /admin/auth/login, /admin/users, etc.
 
 export const apiRoutes = router;

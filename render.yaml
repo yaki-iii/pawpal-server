@@ -18,6 +18,16 @@ services:
         sync: false
       - key: JWT_EXPIRES_IN
         value: 7d
+      - key: ADMIN_BOOTSTRAP_EMAIL
+        value: yaki_meng@163.com
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        sync: false
+      - key: ADMIN_JWT_SECRET
+        sync: false
+      - key: ADMIN_JWT_EXPIRES_IN
+        value: 12h
+      - key: ADMIN_PANEL_ORIGIN
+        sync: false
       - key: DEEPSEEK_API_KEY
         sync: false
       - key: AMAP_WEB_SERVICE_KEY

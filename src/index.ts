@@ -4,6 +4,7 @@ import { createApp } from './app';
 import { logger } from './utils/logger';
 import { startScheduler } from './utils/scheduler';
 import { runStartupMigrations } from './utils/startupMigration';
+import { AdminService } from './services/adminService';
 
 /**
  * Server entry point.
@@ -17,9 +18,11 @@ async function main(): Promise<void> {
     logger.info(`📡 Environment: ${config.nodeEnv}`);
   });
 
-  void runStartupMigrations().catch((error) => {
-    logger.error(`Startup database guards failed: ${error}`);
-  });
+  void runStartupMigrations()
+    .then(() => AdminService.bootstrapSuperAdmin())
+    .catch((error) => {
+      logger.error(`Startup database guards failed: ${error}`);
+    });
 
   // Start background cron scheduler (reminders, data cleanup)
   startScheduler();

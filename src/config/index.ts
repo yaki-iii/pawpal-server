@@ -34,6 +34,14 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
 
+  admin: {
+    bootstrapEmail: process.env.ADMIN_BOOTSTRAP_EMAIL || '',
+    bootstrapPassword: process.env.ADMIN_BOOTSTRAP_PASSWORD || '',
+    jwtSecret: process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'admin-fallback-secret-change-me',
+    jwtExpiresIn: process.env.ADMIN_JWT_EXPIRES_IN || '12h',
+    panelOrigin: process.env.ADMIN_PANEL_ORIGIN || '',
+  },
+
   llm: {
     // DEEPSEEK_* takes precedence over LLM_* (the multi-turn chat endpoint
     // uses DEEPSEEK_*; the legacy /consult endpoint uses LLM_*)
