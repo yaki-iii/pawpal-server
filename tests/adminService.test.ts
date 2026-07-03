@@ -20,6 +20,15 @@ jest.mock('../src/config/database', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    aiAssistantSession: {
+      count: jest.fn(),
+    },
+    emergencyHelp: {
+      count: jest.fn(),
+    },
+    vetClinic: {
+      count: jest.fn(),
+    },
     user: {
       count: jest.fn(),
       findMany: jest.fn(),
@@ -72,6 +81,14 @@ jest.mock('../src/config', () => ({
       jwtExpiresIn: '12h',
       panelOrigin: 'https://admin.example.com',
     },
+    nodeEnv: 'test',
+    database: { url: 'postgresql://test' },
+    jwt: { secret: 'fallback-secret-key' },
+    llm: { apiKey: '', model: 'deepseek-chat' },
+    ark: { apiKey: '', visionModel: 'doubao-seed-2-1-pro-260628' },
+    amap: { webServiceKey: '' },
+    encryption: { key: 'pawpal-encryption-key-32bytes-changeme!!' },
+    upload: { dir: 'uploads' },
   },
 }));
 
@@ -243,6 +260,47 @@ describe('AdminService', () => {
         content: { moments: 20, posts: 7 },
         reports: { pending: 3 },
       });
+    });
+  });
+
+  describe('admin monitoring', () => {
+    it('returns AI, SOS, and system read-only metrics without secrets', async () => {
+      (prisma.aiAssistantSession.count as jest.Mock)
+        .mockResolvedValueOnce(12)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(2);
+      (prisma.emergencyHelp.count as jest.Mock)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2);
+      (prisma.vetClinic.count as jest.Mock).mockResolvedValue(8);
+
+      const ai = await AdminService.getAIMetrics();
+      const sos = await AdminService.getSOSMetrics();
+      const system = await AdminService.getSystemStatus('pawpal-test-build');
+
+      expect(ai).toEqual(expect.objectContaining({
+        totalSessions: 12,
+        todaySessions: 3,
+        imageSessions: 4,
+        fallbackSessions: 2,
+        deepSeekConfigured: false,
+        arkConfigured: false,
+      }));
+      expect(sos).toEqual(expect.objectContaining({
+        totalHelpRequests: 5,
+        activeHelpRequests: 1,
+        todayHelpRequests: 2,
+        localVetClinics: 8,
+        amapConfigured: false,
+      }));
+      expect(system).toEqual(expect.objectContaining({
+        buildId: 'pawpal-test-build',
+        environment: 'test',
+      }));
+      expect(JSON.stringify(system)).not.toContain('secret');
+      expect(JSON.stringify(system)).not.toContain('key');
     });
   });
 

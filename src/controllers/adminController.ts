@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { sendError, sendSuccess } from '../middleware/error';
 import { logger } from '../utils/logger';
 import { AdminService } from '../services/adminService';
+import { BUILD_ID } from '../buildInfo';
 
 function requestContext(req: Request): { ipAddress: string; userAgent: string } {
   return {
@@ -40,6 +41,33 @@ export class AdminController {
       sendSuccess(res, summary);
     } catch (error) {
       sendError(res, 500, (error as Error).message || '获取后台统计失败', undefined, 500);
+    }
+  }
+
+  static async getAIMetrics(_req: Request, res: Response): Promise<void> {
+    try {
+      const metrics = await AdminService.getAIMetrics();
+      sendSuccess(res, metrics);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '获取 AI 监控失败', undefined, 500);
+    }
+  }
+
+  static async getSOSMetrics(_req: Request, res: Response): Promise<void> {
+    try {
+      const metrics = await AdminService.getSOSMetrics();
+      sendSuccess(res, metrics);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '获取 SOS 监控失败', undefined, 500);
+    }
+  }
+
+  static async getSystemStatus(_req: Request, res: Response): Promise<void> {
+    try {
+      const status = AdminService.getSystemStatus(BUILD_ID);
+      sendSuccess(res, status);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '获取系统状态失败', undefined, 500);
     }
   }
 

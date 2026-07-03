@@ -15,6 +15,9 @@ jest.mock('../src/services/adminService', () => ({
     login: jest.fn(),
     getAdminById: jest.fn(),
     getDashboardSummary: jest.fn(),
+    getAIMetrics: jest.fn(),
+    getSOSMetrics: jest.fn(),
+    getSystemStatus: jest.fn(),
     listUsers: jest.fn(),
     getUserDetail: jest.fn(),
     suspendUser: jest.fn(),
@@ -194,6 +197,23 @@ describe('admin HTTP layer', () => {
         status: 'ACTIVE',
         search: undefined,
       });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('returns admin monitoring metrics', async () => {
+      (AdminService.getAIMetrics as jest.Mock).mockResolvedValue({ totalSessions: 1 });
+      (AdminService.getSOSMetrics as jest.Mock).mockResolvedValue({ totalHelpRequests: 2 });
+      (AdminService.getSystemStatus as jest.Mock).mockReturnValue({ buildId: 'build-1' });
+      const req = {} as Request;
+      const res = mockResponse();
+
+      await AdminController.getAIMetrics(req, res);
+      await AdminController.getSOSMetrics(req, res);
+      await AdminController.getSystemStatus(req, res);
+
+      expect(AdminService.getAIMetrics).toHaveBeenCalled();
+      expect(AdminService.getSOSMetrics).toHaveBeenCalled();
+      expect(AdminService.getSystemStatus).toHaveBeenCalledWith(expect.any(String));
       expect(res.status).toHaveBeenCalledWith(200);
     });
 

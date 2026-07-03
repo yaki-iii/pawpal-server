@@ -248,6 +248,70 @@ export class AdminService {
     };
   }
 
+  static async getAIMetrics(): Promise<Record<string, unknown>> {
+    const today = AdminService.startOfToday();
+    const [totalSessions, todaySessions, imageSessions, fallbackSessions] = await Promise.all([
+      prisma.aiAssistantSession.count(),
+      prisma.aiAssistantSession.count({ where: { createdAt: { gte: today } } }),
+      prisma.aiAssistantSession.count({ where: { imageUrls: { isEmpty: false } } }),
+      prisma.aiAssistantSession.count({
+        where: {
+          OR: [
+            { summary: { contains: 'fallback', mode: 'insensitive' } },
+            { summary: { contains: '暂时无法', mode: 'insensitive' } },
+            { summary: { contains: '无法识别图片', mode: 'insensitive' } },
+          ],
+        },
+      }),
+    ]);
+
+    return {
+      totalSessions,
+      todaySessions,
+      imageSessions,
+      fallbackSessions,
+      deepSeekConfigured: AdminService.hasConfiguredSecret(config.llm.apiKey, ['your-deepseek-api-key-here']),
+      arkConfigured: AdminService.hasConfiguredSecret(config.ark.apiKey, ['your-ark-api-key-here']),
+      model: config.llm.model,
+      visionModel: config.ark.visionModel,
+    };
+  }
+
+  static async getSOSMetrics(): Promise<Record<string, unknown>> {
+    const today = AdminService.startOfToday();
+    const [totalHelpRequests, activeHelpRequests, todayHelpRequests, localVetClinics] = await Promise.all([
+      prisma.emergencyHelp.count(),
+      prisma.emergencyHelp.count({ where: { status: 'ACTIVE' } }),
+      prisma.emergencyHelp.count({ where: { createdAt: { gte: today } } }),
+      prisma.vetClinic.count(),
+    ]);
+
+    return {
+      totalHelpRequests,
+      activeHelpRequests,
+      todayHelpRequests,
+      localVetClinics,
+      amapConfigured: AdminService.hasConfiguredSecret(config.amap.webServiceKey),
+    };
+  }
+
+  static getSystemStatus(buildId: string): Record<string, unknown> {
+    return {
+      buildId,
+      environment: config.nodeEnv,
+      configStatus: {
+        database: AdminService.hasConfiguredSecret(config.database.url),
+        jwt: AdminService.hasConfiguredSecret(config.jwt.secret, ['fallback-secret-key']),
+        adminJwt: AdminService.hasConfiguredSecret(config.admin.jwtSecret, ['admin-fallback-secret-change-me']),
+        deepSeek: AdminService.hasConfiguredSecret(config.llm.apiKey, ['your-deepseek-api-key-here']),
+        ark: AdminService.hasConfiguredSecret(config.ark.apiKey, ['your-ark-api-key-here']),
+        amap: AdminService.hasConfiguredSecret(config.amap.webServiceKey),
+        encryption: AdminService.hasConfiguredSecret(config.encryption.key, ['pawpal-encryption-key-32bytes-changeme!!']),
+        upload: AdminService.hasConfiguredSecret(config.upload.dir),
+      },
+    };
+  }
+
   static async listUsers(query: ListUsersQuery = {}): Promise<{
     items: Array<Record<string, unknown>>;
     meta: { page: number; pageSize: number; total: number; totalPages: number };
@@ -858,6 +922,17 @@ export class AdminService {
       context,
     });
     return AdminService.toAdminMomentListItem(after);
+  }
+
+  private static startOfToday(): Date {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }
+
+  private static hasConfiguredSecret(value: string | undefined, placeholders: string[] = []): boolean {
+    const normalized = (value || '').trim();
+    return normalized.length > 0 && !placeholders.includes(normalized);
   }
 
   static async writeAuditLog(input: {

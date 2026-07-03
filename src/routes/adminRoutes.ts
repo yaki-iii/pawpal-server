@@ -71,6 +71,9 @@ router.post('/auth/login', authRateLimiter, validateBody(loginSchema), AdminCont
 router.get('/auth/me', requireAdmin, AdminController.getMe);
 
 router.get('/dashboard/summary', requireAdmin, AdminController.getDashboardSummary);
+router.get('/ai/metrics', requireAdmin, AdminController.getAIMetrics);
+router.get('/sos/metrics', requireAdmin, AdminController.getSOSMetrics);
+router.get('/system/status', requireAdmin, AdminController.getSystemStatus);
 
 router.get('/users', requireAdmin, validateQuery(listUsersQuerySchema), AdminController.listUsers);
 router.get('/users/:id', requireAdmin, validateParams(userIdParamsSchema), AdminController.getUserDetail);
