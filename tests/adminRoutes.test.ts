@@ -23,6 +23,8 @@ jest.mock('../src/services/adminService', () => ({
     listContent: jest.fn(),
     removeContent: jest.fn(),
     restoreContent: jest.fn(),
+    listReports: jest.fn(),
+    handleReport: jest.fn(),
   },
 }));
 
@@ -221,6 +223,34 @@ describe('admin HTTP layer', () => {
       );
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         message: '内容已隐藏',
+      }));
+    });
+
+    it('handles a report with admin actor and request context', async () => {
+      (AdminService.handleReport as jest.Mock).mockResolvedValue({
+        id: 'report-1',
+        status: 'RESOLVED',
+        resolutionAction: 'HIDE_CONTENT',
+      });
+      const req = {
+        admin: activeAdmin,
+        params: { id: 'report-1' },
+        body: { status: 'RESOLVED', action: 'HIDE_CONTENT', note: '已隐藏' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.handleReport(req, res);
+
+      expect(AdminService.handleReport).toHaveBeenCalledWith(
+        activeAdmin,
+        'report-1',
+        { status: 'RESOLVED', action: 'HIDE_CONTENT', note: '已隐藏' },
+        { ipAddress: '127.0.0.1', userAgent: 'jest' },
+      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        message: '举报已处理',
       }));
     });
   });

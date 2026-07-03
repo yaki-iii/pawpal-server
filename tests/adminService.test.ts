@@ -14,6 +14,12 @@ jest.mock('../src/config/database', () => ({
       findMany: jest.fn(),
       count: jest.fn(),
     },
+    contentReport: {
+      count: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
     user: {
       count: jest.fn(),
       findMany: jest.fn(),
@@ -209,6 +215,7 @@ describe('AdminService', () => {
       (prisma.pet.count as jest.Mock).mockResolvedValue(9);
       (prisma.moment.count as jest.Mock).mockResolvedValue(20);
       (prisma.post.count as jest.Mock).mockResolvedValue(7);
+      (prisma.contentReport.count as jest.Mock).mockResolvedValue(3);
 
       const summary = await AdminService.getDashboardSummary();
 
@@ -216,7 +223,7 @@ describe('AdminService', () => {
         users: { total: 12, suspended: 2 },
         pets: { total: 9 },
         content: { moments: 20, posts: 7 },
-        reports: { pending: 0 },
+        reports: { pending: 3 },
       });
     });
   });
@@ -515,6 +522,139 @@ describe('AdminService', () => {
           targetType: 'MOMENT',
           targetId: 'moment-1',
           reason: '复核通过',
+        }),
+      });
+    });
+  });
+
+  describe('report moderation', () => {
+    const actor = {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      name: 'Admin',
+      role: 'CONTENT_MODERATOR',
+      status: 'ACTIVE',
+      lastLoginAt: null,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    };
+
+    it('lists pending reports', async () => {
+      const createdAt = new Date('2026-07-03T00:00:00Z');
+      (prisma.contentReport.count as jest.Mock).mockResolvedValue(1);
+      (prisma.contentReport.findMany as jest.Mock).mockResolvedValue([{
+        id: 'report-1',
+        reporterId: 'reporter-1',
+        targetType: 'POST',
+        targetId: 'post-1',
+        targetOwnerId: 'author-1',
+        reason: 'FALSE_MEDICAL',
+        note: '危险建议',
+        status: 'PENDING',
+        duplicateCount: 1,
+        resolutionAction: null,
+        resolutionNote: '',
+        handledByAdminId: null,
+        handledAt: null,
+        createdAt,
+        updatedAt: createdAt,
+        lastReportedAt: createdAt,
+      }]);
+
+      const result = await AdminService.listReports({ status: 'PENDING' });
+
+      expect(result.meta.total).toBe(1);
+      expect(result.items[0]).toEqual(expect.objectContaining({
+        id: 'report-1',
+        targetType: 'POST',
+        status: 'PENDING',
+        reason: 'FALSE_MEDICAL',
+      }));
+      expect(prisma.contentReport.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { status: 'PENDING' },
+      }));
+    });
+
+    it('resolves a report by hiding the reported post and writing an audit log', async () => {
+      const createdAt = new Date('2026-07-03T00:00:00Z');
+      const report = {
+        id: 'report-1',
+        reporterId: 'reporter-1',
+        targetType: 'POST',
+        targetId: 'post-1',
+        targetOwnerId: 'author-1',
+        reason: 'FALSE_MEDICAL',
+        note: '危险建议',
+        status: 'PENDING',
+        duplicateCount: 1,
+        resolutionAction: null,
+        resolutionNote: '',
+        handledByAdminId: null,
+        handledAt: null,
+        createdAt,
+        updatedAt: createdAt,
+        lastReportedAt: createdAt,
+      };
+      (prisma.contentReport.findUnique as jest.Mock).mockResolvedValue(report);
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 'post-1',
+        isRemoved: false,
+        title: '错误医疗建议',
+        content: '危险内容',
+        images: [],
+        likeCount: 0,
+        commentCount: 0,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      (prisma.post.update as jest.Mock).mockResolvedValue({
+        id: 'post-1',
+        isRemoved: true,
+        title: '错误医疗建议',
+        content: '危险内容',
+        images: [],
+        likeCount: 0,
+        commentCount: 0,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      (prisma.contentReport.update as jest.Mock).mockResolvedValue({
+        ...report,
+        status: 'RESOLVED',
+        resolutionAction: 'HIDE_CONTENT',
+        resolutionNote: '已隐藏',
+        handledByAdminId: 'admin-1',
+        handledAt: new Date('2026-07-03T01:00:00Z'),
+      });
+      (prisma.adminAuditLog.create as jest.Mock).mockResolvedValue({});
+
+      const result = await AdminService.handleReport(actor, 'report-1', {
+        status: 'RESOLVED',
+        action: 'HIDE_CONTENT',
+        note: '已隐藏',
+      });
+
+      expect(result.status).toBe('RESOLVED');
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        data: { isRemoved: true },
+      });
+      expect(prisma.contentReport.update).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+        data: expect.objectContaining({
+          status: 'RESOLVED',
+          resolutionAction: 'HIDE_CONTENT',
+          resolutionNote: '已隐藏',
+          handledByAdminId: 'admin-1',
+        }),
+      });
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          adminUserId: 'admin-1',
+          action: 'REPORT_RESOLVE',
+          targetType: 'REPORT',
+          targetId: 'report-1',
+          reason: '已隐藏',
         }),
       });
     });

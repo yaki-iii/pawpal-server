@@ -160,4 +160,32 @@ export class AdminController {
       sendError(res, 400, (error as Error).message || '恢复内容失败');
     }
   }
+
+  static async listReports(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await AdminService.listReports({
+        page: Number(req.query.page || 1),
+        pageSize: Number(req.query.pageSize || 20),
+        status: req.query.status as 'PENDING' | 'REVIEWING' | 'RESOLVED' | 'REJECTED' | undefined,
+        targetType: typeof req.query.targetType === 'string' ? req.query.targetType : undefined,
+      });
+      sendSuccess(res, result);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '获取举报列表失败', undefined, 500);
+    }
+  }
+
+  static async handleReport(req: Request, res: Response): Promise<void> {
+    if (!req.admin) {
+      sendError(res, 401, '未授权', undefined, 401);
+      return;
+    }
+
+    try {
+      const report = await AdminService.handleReport(req.admin, req.params.id, req.body, requestContext(req));
+      sendSuccess(res, report, '举报已处理');
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '处理举报失败');
+    }
+  }
 }

@@ -85,6 +85,40 @@ enum AdminStatus {
   DISABLED
 }
 
+enum ReportTargetType {
+  POST
+  MOMENT
+  COMMENT
+  MOMENT_COMMENT
+  USER
+  CIRCLE
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  FALSE_MEDICAL
+  ILLEGAL_DANGEROUS
+  INAPPROPRIATE_MEDIA
+  PRIVACY
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  REJECTED
+}
+
+enum ReportResolutionAction {
+  NO_ACTION
+  HIDE_CONTENT
+  RESTORE_CONTENT
+  WARN_USER
+  SUSPEND_USER
+}
+
 // Reddit-style circle enums
 enum CircleVisibility {
   PUBLIC     // 任何人可浏览和发帖
@@ -622,4 +656,28 @@ model AdminAuditLog {
   @@index([targetType, targetId])
   @@index([action, createdAt])
   @@map("admin_audit_logs")
+}
+
+model ContentReport {
+  id                String                  @id @default(cuid())
+  reporterId        String
+  targetType        ReportTargetType
+  targetId          String
+  targetOwnerId     String                  @default("")
+  reason            ReportReason
+  note              String                  @default("")
+  status            ReportStatus            @default(PENDING)
+  duplicateCount    Int                     @default(1)
+  resolutionAction  ReportResolutionAction?
+  resolutionNote    String                  @default("")
+  handledByAdminId  String?
+  handledAt         DateTime?
+  lastReportedAt    DateTime                @default(now())
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId, targetType, targetId])
+  @@map("content_reports")
 }

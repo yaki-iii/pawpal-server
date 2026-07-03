@@ -43,6 +43,21 @@ const contentModerationSchema = z.object({
   reason: z.string().min(1, '请输入处理原因').max(200, '处理原因最多200字'),
 });
 
+const listReportsQuerySchema = paginationQuerySchema.extend({
+  status: z.enum(['PENDING', 'REVIEWING', 'RESOLVED', 'REJECTED']).optional(),
+  targetType: z.enum(['POST', 'MOMENT', 'COMMENT', 'MOMENT_COMMENT', 'USER', 'CIRCLE']).optional(),
+});
+
+const reportIdParamsSchema = z.object({
+  id: z.string().min(1, '缺少举报 ID'),
+});
+
+const handleReportSchema = z.object({
+  status: z.enum(['REVIEWING', 'RESOLVED', 'REJECTED']),
+  action: z.enum(['NO_ACTION', 'HIDE_CONTENT', 'RESTORE_CONTENT', 'WARN_USER', 'SUSPEND_USER']),
+  note: z.string().min(1, '请输入处理说明').max(500, '处理说明最多500字'),
+});
+
 const suspendUserSchema = z.object({
   reason: z.string().min(1, '请输入冻结原因').max(200, '冻结原因最多200字'),
   suspendedUntil: z.string().datetime().nullable().optional(),
@@ -92,6 +107,16 @@ router.post(
   validateParams(contentParamsSchema),
   validateBody(contentModerationSchema),
   AdminController.restoreContent,
+);
+
+router.get('/reports', requireAdmin, validateQuery(listReportsQuerySchema), AdminController.listReports);
+router.post(
+  '/reports/:id/handle',
+  requireAdmin,
+  requireAdminRole(['OPS_ADMIN', 'CONTENT_MODERATOR']),
+  validateParams(reportIdParamsSchema),
+  validateBody(handleReportSchema),
+  AdminController.handleReport,
 );
 
 router.get(

@@ -9,6 +9,8 @@ type AdminStatusName = 'ACTIVE' | 'DISABLED';
 type UserAccountStatusName = 'ACTIVE' | 'SUSPENDED';
 type AdminContentType = 'POST' | 'MOMENT';
 type AdminContentStatus = 'ACTIVE' | 'REMOVED';
+type ReportStatusName = 'PENDING' | 'REVIEWING' | 'RESOLVED' | 'REJECTED';
+type ReportResolutionActionName = 'NO_ACTION' | 'HIDE_CONTENT' | 'RESTORE_CONTENT' | 'WARN_USER' | 'SUSPEND_USER';
 
 export interface AdminDTO {
   id: string;
@@ -60,6 +62,19 @@ interface ListContentQuery {
 
 interface ContentModerationInput {
   reason: string;
+}
+
+interface ListReportsQuery {
+  page?: number;
+  pageSize?: number;
+  status?: ReportStatusName;
+  targetType?: string;
+}
+
+interface HandleReportInput {
+  status: ReportStatusName;
+  action: ReportResolutionActionName;
+  note: string;
 }
 
 /**
@@ -216,19 +231,20 @@ export class AdminService {
     content: { moments: number; posts: number };
     reports: { pending: number };
   }> {
-    const [totalUsers, suspendedUsers, totalPets, moments, posts] = await Promise.all([
+    const [totalUsers, suspendedUsers, totalPets, moments, posts, pendingReports] = await Promise.all([
       prisma.user.count(),
       prisma.user.count({ where: { accountStatus: 'SUSPENDED' } }),
       prisma.pet.count(),
       prisma.moment.count(),
       prisma.post.count(),
+      prisma.contentReport.count({ where: { status: 'PENDING' } }),
     ]);
 
     return {
       users: { total: totalUsers, suspended: suspendedUsers },
       pets: { total: totalPets },
       content: { moments, posts },
-      reports: { pending: 0 },
+      reports: { pending: pendingReports },
     };
   }
 
@@ -500,6 +516,98 @@ export class AdminService {
     return AdminService.setContentRemoved(actor, type, id, false, input.reason, context);
   }
 
+  static async listReports(query: ListReportsQuery = {}): Promise<{
+    items: Array<Record<string, unknown>>;
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  }> {
+    const page = Math.max(1, query.page || 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize || 20));
+    const where: Record<string, unknown> = {};
+    if (query.status) where.status = query.status;
+    if (query.targetType) where.targetType = query.targetType;
+
+    const [total, reports] = await Promise.all([
+      prisma.contentReport.count({ where }),
+      prisma.contentReport.findMany({
+        where,
+        orderBy: { lastReportedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      items: reports.map(AdminService.toAdminReportListItem),
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  static async handleReport(
+    actor: AdminActor,
+    reportId: string,
+    input: HandleReportInput,
+    context: AdminRequestContext = {},
+  ): Promise<Record<string, unknown>> {
+    const before = await prisma.contentReport.findUnique({ where: { id: reportId } });
+    if (!before) throw new Error('举报不存在');
+
+    await AdminService.applyReportAction(actor, before as Record<string, any>, input, context);
+
+    const after = await prisma.contentReport.update({
+      where: { id: reportId },
+      data: {
+        status: input.status,
+        resolutionAction: input.action,
+        resolutionNote: input.note,
+        handledByAdminId: actor.id,
+        handledAt: new Date(),
+      },
+    });
+
+    await AdminService.writeAuditLog({
+      adminUserId: actor.id,
+      action: input.status === 'REJECTED' ? 'REPORT_REJECT' : 'REPORT_RESOLVE',
+      targetType: 'REPORT',
+      targetId: reportId,
+      reason: input.note,
+      beforeSnapshot: before,
+      afterSnapshot: after,
+      context,
+    });
+
+    return AdminService.toAdminReportListItem(after);
+  }
+
+  private static async applyReportAction(
+    actor: AdminActor,
+    report: Record<string, any>,
+    input: HandleReportInput,
+    context: AdminRequestContext,
+  ): Promise<void> {
+    if (input.action === 'NO_ACTION' || input.action === 'WARN_USER') return;
+
+    if (input.action === 'SUSPEND_USER') {
+      const userId = report.targetOwnerId || (report.targetType === 'USER' ? report.targetId : '');
+      if (!userId) throw new Error('无法识别需冻结的用户');
+      await AdminService.suspendUser(actor, userId, { reason: input.note }, context);
+      return;
+    }
+
+    if (report.targetType === 'POST') {
+      await AdminService.setContentRemoved(actor, 'POST', report.targetId, input.action === 'HIDE_CONTENT', input.note, context);
+      return;
+    }
+
+    if (report.targetType === 'MOMENT') {
+      await AdminService.setContentRemoved(actor, 'MOMENT', report.targetId, input.action === 'HIDE_CONTENT', input.note, context);
+    }
+  }
+
   private static async setContentRemoved(
     actor: AdminActor,
     type: AdminContentType,
@@ -652,6 +760,27 @@ export class AdminService {
       updatedAt: moment.updatedAt.toISOString(),
       author: moment.user ? AdminService.toAdminAuthor(moment.user) : undefined,
       pet: moment.pet ? AdminService.toAdminPet(moment.pet) : undefined,
+    };
+  }
+
+  private static toAdminReportListItem(report: Record<string, any>): Record<string, unknown> {
+    return {
+      id: report.id,
+      reporterId: report.reporterId,
+      targetType: report.targetType,
+      targetId: report.targetId,
+      targetOwnerId: report.targetOwnerId || '',
+      reason: report.reason,
+      note: report.note || '',
+      status: report.status,
+      duplicateCount: report.duplicateCount || 1,
+      resolutionAction: report.resolutionAction || null,
+      resolutionNote: report.resolutionNote || '',
+      handledByAdminId: report.handledByAdminId || null,
+      handledAt: report.handledAt ? report.handledAt.toISOString() : null,
+      lastReportedAt: report.lastReportedAt ? report.lastReportedAt.toISOString() : null,
+      createdAt: report.createdAt.toISOString(),
+      updatedAt: report.updatedAt.toISOString(),
     };
   }
 

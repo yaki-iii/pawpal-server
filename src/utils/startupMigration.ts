@@ -25,6 +25,18 @@ export async function runStartupMigrations(): Promise<void> {
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AdminStatus') THEN
           CREATE TYPE "AdminStatus" AS ENUM ('ACTIVE', 'DISABLED');
         END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ReportTargetType') THEN
+          CREATE TYPE "ReportTargetType" AS ENUM ('POST', 'MOMENT', 'COMMENT', 'MOMENT_COMMENT', 'USER', 'CIRCLE');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ReportReason') THEN
+          CREATE TYPE "ReportReason" AS ENUM ('SPAM', 'HARASSMENT', 'FALSE_MEDICAL', 'ILLEGAL_DANGEROUS', 'INAPPROPRIATE_MEDIA', 'PRIVACY', 'OTHER');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ReportStatus') THEN
+          CREATE TYPE "ReportStatus" AS ENUM ('PENDING', 'REVIEWING', 'RESOLVED', 'REJECTED');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ReportResolutionAction') THEN
+          CREATE TYPE "ReportResolutionAction" AS ENUM ('NO_ACTION', 'HIDE_CONTENT', 'RESTORE_CONTENT', 'WARN_USER', 'SUSPEND_USER');
+        END IF;
       END $$;
     `);
     await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "accountStatus" "UserAccountStatus" NOT NULL DEFAULT \'ACTIVE\'::"UserAccountStatus"');
@@ -69,6 +81,30 @@ export async function runStartupMigrations(): Promise<void> {
       'admin_audit_logs_adminUserId_fkey',
       'ALTER TABLE "admin_audit_logs" ADD CONSTRAINT "admin_audit_logs_adminUserId_fkey" FOREIGN KEY ("adminUserId") REFERENCES "admin_users"("id") ON DELETE SET NULL ON UPDATE CASCADE',
     );
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "content_reports" (
+        "id" TEXT NOT NULL,
+        "reporterId" TEXT NOT NULL,
+        "targetType" "ReportTargetType" NOT NULL,
+        "targetId" TEXT NOT NULL,
+        "targetOwnerId" TEXT NOT NULL DEFAULT '',
+        "reason" "ReportReason" NOT NULL,
+        "note" TEXT NOT NULL DEFAULT '',
+        "status" "ReportStatus" NOT NULL DEFAULT 'PENDING',
+        "duplicateCount" INTEGER NOT NULL DEFAULT 1,
+        "resolutionAction" "ReportResolutionAction",
+        "resolutionNote" TEXT NOT NULL DEFAULT '',
+        "handledByAdminId" TEXT,
+        "handledAt" TIMESTAMP(3),
+        "lastReportedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "content_reports_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "content_reports_status_createdAt_idx" ON "content_reports"("status", "createdAt")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "content_reports_targetType_targetId_idx" ON "content_reports"("targetType", "targetId")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "content_reports_reporterId_targetType_targetId_idx" ON "content_reports"("reporterId", "targetType", "targetId")');
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "moment_comments" (
         "id" TEXT NOT NULL,
