@@ -599,6 +599,66 @@ export class AdminService {
     };
   }
 
+  static async getContentDetail(type: AdminContentType, id: string): Promise<Record<string, unknown>> {
+    if (type === 'POST') {
+      const post = await prisma.post.findUnique({
+        where: { id },
+        include: {
+          author: { select: { id: true, email: true, nickname: true, avatar: true } },
+          pet: { select: { id: true, name: true, photo: true } },
+          circle: { select: { id: true, name: true } },
+        },
+      });
+      if (!post) throw new Error('动态不存在');
+      return AdminService.toAdminPostListItem(post);
+    }
+
+    if (type === 'MOMENT') {
+      const moment = await prisma.moment.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, email: true, nickname: true, avatar: true } },
+          pet: { select: { id: true, name: true, photo: true } },
+        },
+      });
+      if (!moment) throw new Error('日常不存在');
+      return AdminService.toAdminMomentListItem(moment);
+    }
+
+    if (type === 'COMMENT') {
+      const comment = await prisma.comment.findUnique({
+        where: { id },
+        include: {
+          author: { select: { id: true, email: true, nickname: true, avatar: true } },
+          post: { select: { id: true, title: true } },
+        },
+      });
+      if (!comment) throw new Error('评论不存在');
+      return AdminService.toAdminCommentListItem(comment, 'COMMENT');
+    }
+
+    if (type === 'MOMENT_COMMENT') {
+      const comment = await prisma.momentComment.findUnique({
+        where: { id },
+        include: {
+          author: { select: { id: true, email: true, nickname: true, avatar: true } },
+          moment: { select: { id: true, content: true } },
+        },
+      });
+      if (!comment) throw new Error('日常评论不存在');
+      return AdminService.toAdminCommentListItem(comment, 'MOMENT_COMMENT');
+    }
+
+    const circle = await prisma.circle.findUnique({
+      where: { id },
+      include: {
+        owner: { select: { id: true, email: true, nickname: true, avatar: true } },
+      },
+    });
+    if (!circle) throw new Error('圈子不存在');
+    return AdminService.toAdminCircleListItem(circle);
+  }
+
   private static async listCommentsForModeration(
     page: number,
     pageSize: number,

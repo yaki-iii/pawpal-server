@@ -25,6 +25,7 @@ jest.mock('../src/services/adminService', () => ({
     unsuspendUser: jest.fn(),
     listAuditLogs: jest.fn(),
     listContent: jest.fn(),
+    getContentDetail: jest.fn(),
     removeContent: jest.fn(),
     restoreContent: jest.fn(),
     listReports: jest.fn(),
@@ -284,6 +285,34 @@ describe('admin HTTP layer', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         message: '内容已隐藏',
       }));
+    });
+
+    it('returns a content detail', async () => {
+      (AdminService.getContentDetail as jest.Mock).mockResolvedValue({
+        id: 'post-1',
+        type: 'POST',
+        title: '领养故事',
+        content: '今天带猫去公园。',
+      });
+      const req = {
+        params: { type: 'POST', id: 'post-1' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.getContentDetail(req, res);
+
+      expect(AdminService.getContentDetail).toHaveBeenCalledWith('POST', 'post-1');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 0,
+        data: {
+          id: 'post-1',
+          type: 'POST',
+          title: '领养故事',
+          content: '今天带猫去公园。',
+        },
+        message: 'success',
+      });
     });
 
     it('handles a report with admin actor and request context', async () => {

@@ -104,6 +104,12 @@ router.post(
 );
 
 router.get('/content', requireAdmin, validateQuery(listContentQuerySchema), AdminController.listContent);
+router.get(
+  '/content/:type/:id',
+  requireAdmin,
+  validateParams(contentParamsSchema),
+  AdminController.getContentDetail,
+);
 router.post(
   '/content/:type/:id/remove',
   requireAdmin,

@@ -163,6 +163,18 @@ export class AdminController {
     }
   }
 
+  static async getContentDetail(req: Request, res: Response): Promise<void> {
+    try {
+      const content = await AdminService.getContentDetail(
+        req.params.type as 'POST' | 'MOMENT' | 'COMMENT' | 'MOMENT_COMMENT' | 'CIRCLE',
+        req.params.id,
+      );
+      sendSuccess(res, content);
+    } catch (error) {
+      sendError(res, 404, (error as Error).message || '内容不存在', undefined, 404);
+    }
+  }
+
   static async removeContent(req: Request, res: Response): Promise<void> {
     if (!req.admin) {
       sendError(res, 401, '未授权', undefined, 401);

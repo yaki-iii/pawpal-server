@@ -457,6 +457,56 @@ describe('AdminService', () => {
     });
   });
 
+  describe('getContentDetail', () => {
+    it('returns a post detail with author, pet and circle context', async () => {
+      const createdAt = new Date('2026-07-03T08:00:00Z');
+      const updatedAt = new Date('2026-07-03T09:00:00Z');
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({
+        id: 'post-1',
+        title: '领养故事',
+        content: '今天带猫去公园。',
+        images: ['https://cdn.example.com/post.jpg'],
+        isRemoved: false,
+        likeCount: 8,
+        commentCount: 2,
+        createdAt,
+        updatedAt,
+        author: {
+          id: 'user-1',
+          email: 'owner@example.com',
+          nickname: '猫猫家长',
+          avatar: '',
+        },
+        pet: { id: 'pet-1', name: '团团', photo: 'https://cdn.example.com/pet.jpg' },
+        circle: { id: 'circle-1', name: '新手养猫' },
+      });
+
+      const detail = await AdminService.getContentDetail('POST', 'post-1');
+
+      expect(prisma.post.findUnique).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        include: {
+          author: { select: { id: true, email: true, nickname: true, avatar: true } },
+          pet: { select: { id: true, name: true, photo: true } },
+          circle: { select: { id: true, name: true } },
+        },
+      });
+      expect(detail).toMatchObject({
+        id: 'post-1',
+        type: 'POST',
+        title: '领养故事',
+        content: '今天带猫去公园。',
+        images: ['https://cdn.example.com/post.jpg'],
+        status: 'ACTIVE',
+        likeCount: 8,
+        commentCount: 2,
+        author: { id: 'user-1', email: 'owner@example.com', nickname: '猫猫家长' },
+        pet: { id: 'pet-1', name: '团团' },
+        circle: { id: 'circle-1', name: '新手养猫' },
+      });
+    });
+  });
+
   describe('suspendUser and unsuspendUser', () => {
     const actor = {
       id: 'admin-1',
