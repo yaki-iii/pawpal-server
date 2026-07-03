@@ -32,12 +32,41 @@ export class UserController {
         sendError(res, 401, '未授权');
         return;
       }
-      const { nickname, avatar, avatarUrl, bio, city } = req.body;
+      const {
+        nickname,
+        avatar,
+        avatarUrl,
+        bio,
+        city,
+        defaultMomentVisibility,
+        profileVisibility,
+        petVisibility,
+        searchable,
+      } = req.body;
       const updateData: Record<string, unknown> = {};
       if (nickname !== undefined) updateData.nickname = nickname;
       if (avatar !== undefined || avatarUrl !== undefined) updateData.avatar = avatar ?? avatarUrl;
       if (bio !== undefined) updateData.bio = bio;
       if (city !== undefined) updateData.city = city;
+      if (defaultMomentVisibility !== undefined) {
+        if (!['PUBLIC', 'FOLLOWERS', 'PRIVATE'].includes(defaultMomentVisibility)) {
+          throw new Error('日常默认可见性无效');
+        }
+        updateData.defaultMomentVisibility = defaultMomentVisibility;
+      }
+      if (profileVisibility !== undefined) {
+        if (!['PUBLIC', 'AUTHENTICATED', 'FOLLOWERS'].includes(profileVisibility)) {
+          throw new Error('主页可见性无效');
+        }
+        updateData.profileVisibility = profileVisibility;
+      }
+      if (petVisibility !== undefined) {
+        if (!['PUBLIC', 'FOLLOWERS', 'PRIVATE'].includes(petVisibility)) {
+          throw new Error('宠物资料可见性无效');
+        }
+        updateData.petVisibility = petVisibility;
+      }
+      if (searchable !== undefined) updateData.searchable = Boolean(searchable);
 
       const user = await prisma.user.update({
         where: { id: req.userId },

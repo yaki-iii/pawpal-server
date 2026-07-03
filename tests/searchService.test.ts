@@ -30,6 +30,7 @@ const user = {
   bio: '布偶新手',
   city: '佛山',
   membershipLevel: 'FREE',
+  searchable: true,
   createdAt: now,
   updatedAt: now,
 };
@@ -147,6 +148,18 @@ describe('SearchService', () => {
       expect(prisma.moment.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
           visibility: 'PUBLIC',
+        }),
+      }));
+    });
+
+    it('should only search users that allow search discovery', async () => {
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+      await SearchService.searchUsers('猫友');
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          searchable: true,
         }),
       }));
     });

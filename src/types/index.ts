@@ -21,6 +21,10 @@ export interface UserDTO {
   bio: string;
   city: string;
   membershipLevel: string;
+  defaultMomentVisibility: string;
+  profileVisibility: string;
+  petVisibility: string;
+  searchable: boolean;
   createdAt: string;
   updatedAt: string;
 }

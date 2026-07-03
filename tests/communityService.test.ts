@@ -585,6 +585,16 @@ describe('CommunityService', () => {
       expect(profile.postCount).toBe(5);
     });
 
+    it('should hide follower-only profiles from non-followers', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        profileVisibility: 'FOLLOWERS',
+      });
+      (prisma.follow.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(CommunityService.getUserProfile('user-1', 'viewer-1')).rejects.toThrow('用户主页不可见');
+    });
+
     it('should throw error if user does not exist', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
 

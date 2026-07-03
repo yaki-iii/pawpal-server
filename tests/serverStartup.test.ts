@@ -67,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.6 admin monitoring build id', async () => {
+  it('exposes the current v0.6 privacy settings build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v06-admin-monitoring-20260703');
+    expect(BUILD_ID).toBe('pawpal-v06-privacy-settings-20260703');
   });
 });

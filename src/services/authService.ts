@@ -112,6 +112,10 @@ export class AuthService {
       bio: user.bio,
       city: user.city,
       membershipLevel: user.membershipLevel,
+      defaultMomentVisibility: (user as { defaultMomentVisibility?: string }).defaultMomentVisibility || 'PUBLIC',
+      profileVisibility: (user as { profileVisibility?: string }).profileVisibility || 'PUBLIC',
+      petVisibility: (user as { petVisibility?: string }).petVisibility || 'PUBLIC',
+      searchable: (user as { searchable?: boolean }).searchable ?? true,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
     };

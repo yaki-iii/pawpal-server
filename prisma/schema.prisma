@@ -149,6 +149,10 @@ model User {
   bio             String          @default("")
   city            String          @default("")
   membershipLevel MembershipLevel @default(FREE)
+  defaultMomentVisibility String  @default("PUBLIC")
+  profileVisibility String        @default("PUBLIC")
+  petVisibility    String         @default("PUBLIC")
+  searchable       Boolean        @default(true)
   accountStatus   UserAccountStatus @default(ACTIVE)
   suspendedUntil  DateTime?
   suspendedReason String          @default("")

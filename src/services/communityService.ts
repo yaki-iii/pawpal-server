@@ -509,6 +509,10 @@ export class CommunityService {
       throw new Error('用户不存在');
     }
 
+    if (!(await CommunityService.canViewUserProfile(user as Record<string, unknown>, currentUserId))) {
+      throw new Error('用户主页不可见');
+    }
+
     const [followerCount, followingCount, postCount] = await Promise.all([
       prisma.follow.count({ where: { followeeId: userId } }),
       prisma.follow.count({ where: { followerId: userId } }),
@@ -530,6 +534,20 @@ export class CommunityService {
       postCount,
       isFollowing,
     };
+  }
+
+  private static async canViewUserProfile(user: Record<string, unknown>, currentUserId?: string): Promise<boolean> {
+    const visibility = String(user.profileVisibility || 'PUBLIC');
+    if (visibility === 'PUBLIC') return true;
+    if (!currentUserId) return false;
+    if (currentUserId === user.id) return true;
+    if (visibility === 'AUTHENTICATED') return true;
+    if (visibility !== 'FOLLOWERS') return true;
+
+    const follow = await prisma.follow.findUnique({
+      where: { followerId_followeeId: { followerId: currentUserId, followeeId: String(user.id) } },
+    });
+    return !!follow;
   }
 
   /**

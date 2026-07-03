@@ -44,6 +44,10 @@ export async function runStartupMigrations(): Promise<void> {
     await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "accountStatus" "UserAccountStatus" NOT NULL DEFAULT \'ACTIVE\'::"UserAccountStatus"');
     await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "suspendedUntil" TIMESTAMP(3)');
     await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "suspendedReason" TEXT NOT NULL DEFAULT \'\'');
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "defaultMomentVisibility" TEXT NOT NULL DEFAULT \'PUBLIC\'');
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "profileVisibility" TEXT NOT NULL DEFAULT \'PUBLIC\'');
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "petVisibility" TEXT NOT NULL DEFAULT \'PUBLIC\'');
+    await prisma.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "searchable" BOOLEAN NOT NULL DEFAULT true');
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "admin_users" (
         "id" TEXT NOT NULL,

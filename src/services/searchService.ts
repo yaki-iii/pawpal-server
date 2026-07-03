@@ -56,6 +56,7 @@ export class SearchService {
   static async searchUsers(keyword: string, limit: number = 10): Promise<UserDTO[]> {
     const users = await prisma.user.findMany({
       where: {
+        searchable: true,
         OR: [
           { nickname: { contains: keyword, mode: 'insensitive' } },
           { bio: { contains: keyword, mode: 'insensitive' } },

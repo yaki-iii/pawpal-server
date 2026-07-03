@@ -100,6 +100,10 @@ describe('AuthService', () => {
       bio: '',
       city: '',
       membershipLevel: 'FREE',
+      defaultMomentVisibility: 'PUBLIC',
+      profileVisibility: 'PUBLIC',
+      petVisibility: 'PUBLIC',
+      searchable: true,
       deletedAt: null,
       createdAt: new Date('2026-01-01'),
       updatedAt: new Date('2026-01-01'),
@@ -114,6 +118,10 @@ describe('AuthService', () => {
       expect(result.user.email).toBe('newuser@example.com');
       expect(result.user.nickname).toBe('新用户');
       expect(result.user.id).toBe('user-1');
+      expect(result.user.defaultMomentVisibility).toBe('PUBLIC');
+      expect(result.user.profileVisibility).toBe('PUBLIC');
+      expect(result.user.petVisibility).toBe('PUBLIC');
+      expect(result.user.searchable).toBe(true);
       expect(result.token).toBeTruthy();
 
       // Verify bcrypt hash was stored (not plaintext)
