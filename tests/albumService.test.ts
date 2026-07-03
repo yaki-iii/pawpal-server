@@ -3,10 +3,10 @@ import { prisma } from '../src/config/database';
 
 jest.mock('../src/config/database', () => ({
   prisma: {
-    pet: { findUnique: jest.fn() },
+    pet: { findUnique: jest.fn(), update: jest.fn() },
     moment: { findMany: jest.fn() },
     healthRecord: { findMany: jest.fn() },
-    growthDiaryEntry: { findMany: jest.fn() },
+    growthDiaryEntry: { findMany: jest.fn(), deleteMany: jest.fn() },
   },
 }));
 
@@ -145,6 +145,72 @@ describe('AlbumService', () => {
       });
 
       await expect(AlbumService.getPetAlbum('pet-1', 'user-1')).rejects.toThrow('无权访问该宠物');
+    });
+
+    it('should sort album oldest first when requested and return pet cover image', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue({ ...mockPet, photo: '/uploads/cover.jpg', birthday: null });
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'moment-new',
+          content: '六月',
+          images: ['/uploads/new.jpg'],
+          videos: [],
+          createdAt: new Date('2026-06-20T12:00:00Z'),
+        },
+      ]);
+      (prisma.healthRecord.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.growthDiaryEntry.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'diary-old',
+          title: '五月',
+          content: '',
+          mood: '',
+          photos: ['/uploads/old.jpg'],
+          videos: [],
+          createdAt: new Date('2026-05-01T12:00:00Z'),
+        },
+      ]);
+
+      const album = await AlbumService.getPetAlbum('pet-1', 'user-1', 'oldest');
+
+      expect(album.coverImage).toBe('/uploads/cover.jpg');
+      expect(album.groups.map((group) => group.month)).toEqual(['2026-05', '2026-06']);
+    });
+  });
+
+  describe('deleteManualAlbumItems', () => {
+    it('should batch delete manual diary album items owned by the user', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.growthDiaryEntry.deleteMany as jest.Mock).mockResolvedValue({ count: 2 });
+
+      const result = await AlbumService.deleteManualAlbumItems(
+        'pet-1',
+        'user-1',
+        ['diary-1', 'milestone-1'],
+      );
+
+      expect(result).toEqual({ deletedCount: 2 });
+      expect(prisma.growthDiaryEntry.deleteMany).toHaveBeenCalledWith({
+        where: {
+          id: { in: ['diary-1', 'milestone-1'] },
+          petId: 'pet-1',
+          userId: 'user-1',
+        },
+      });
+    });
+  });
+
+  describe('setAlbumCover', () => {
+    it('should set pet photo from an album image URL', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.pet.update as jest.Mock).mockResolvedValue({});
+
+      await AlbumService.setAlbumCover('pet-1', 'user-1', '/uploads/cover.jpg');
+
+      expect(prisma.pet.update).toHaveBeenCalledWith({
+        where: { id: 'pet-1' },
+        data: { photo: '/uploads/cover.jpg' },
+      });
     });
   });
 });

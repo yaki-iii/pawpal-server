@@ -4,6 +4,7 @@ import { prisma } from '../src/config/database';
 jest.mock('../src/config/database', () => ({
   prisma: {
     moment: { findMany: jest.fn() },
+    momentLike: { findMany: jest.fn() },
     like: { findMany: jest.fn() },
     follow: { findMany: jest.fn() },
   },
@@ -120,5 +121,70 @@ describe('ProfileContentService', () => {
       where: { userId: 'user-1' },
       orderBy: { createdAt: 'desc' },
     }));
+  });
+
+  it('should aggregate favorite posts and moments with type filters', async () => {
+    (prisma.like.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'like-1',
+        userId: 'user-1',
+        postId: 'post-1',
+        createdAt: new Date('2026-06-28T10:00:00Z'),
+        post: {
+          id: 'post-1',
+          userId: 'user-2',
+          circleId: null,
+          petId: 'pet-1',
+          title: '布偶护理',
+          content: '梳毛记录',
+          images: [],
+          tags: [],
+          likeCount: 1,
+          commentCount: 0,
+          createdAt: now,
+          updatedAt: now,
+          author: user,
+          pet,
+          circle: null,
+        },
+      },
+    ]);
+    (prisma.momentLike.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'moment-like-1',
+        userId: 'user-1',
+        momentId: 'moment-1',
+        createdAt: new Date('2026-06-29T10:00:00Z'),
+        moment: {
+          id: 'moment-1',
+          userId: 'user-2',
+          petId: 'pet-1',
+          content: '今天晒太阳',
+          images: [],
+          videos: [],
+          mood: 'happy',
+          location: '',
+          visibility: 'PUBLIC',
+          likeCount: 1,
+          commentCount: 0,
+          shareCount: 0,
+          createdAt: now,
+          updatedAt: now,
+          user,
+          pet,
+        },
+      },
+    ]);
+
+    const all = await ProfileContentService.listFavorites('user-1', 'all', 20);
+    const moments = await ProfileContentService.listFavorites('user-1', 'moment', 20);
+    const knowledge = await ProfileContentService.listFavorites('user-1', 'knowledge', 20);
+
+    expect(all.items.map((item) => item.type)).toEqual(['moment', 'post']);
+    expect(all.counts).toEqual({ all: 2, post: 1, moment: 1, knowledge: 0, vet: 0 });
+    expect(moments.items).toEqual([
+      expect.objectContaining({ id: 'moment-1', type: 'moment' }),
+    ]);
+    expect(knowledge.items).toEqual([]);
   });
 });

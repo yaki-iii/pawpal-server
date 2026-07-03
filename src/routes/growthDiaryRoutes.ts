@@ -14,6 +14,8 @@ growthDiaryRoutes.use(requireAuth);
 
 // Album timeline for a pet
 growthDiaryRoutes.get('/:petId/album', AlbumController.getPetAlbum);
+growthDiaryRoutes.post('/:petId/album/batch-delete', AlbumController.deleteManualAlbumItems);
+growthDiaryRoutes.post('/:petId/album/cover', AlbumController.setAlbumCover);
 
 // List entries for a pet
 growthDiaryRoutes.get('/:petId/entries', GrowthDiaryController.listEntries);

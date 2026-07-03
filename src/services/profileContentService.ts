@@ -5,6 +5,23 @@ import { CommunityService } from './communityService';
 import { MomentService } from './momentService';
 import { PetService } from './petService';
 
+export type FavoriteContentType = 'all' | 'post' | 'moment' | 'knowledge' | 'vet';
+
+export interface FavoriteContentItemDTO {
+  id: string;
+  type: Exclude<FavoriteContentType, 'all'>;
+  savedAt: string;
+  title: string;
+  subtitle: string;
+  imageUrls: string[];
+  payload: PostDTO | MomentDTO | null;
+}
+
+export interface FavoriteContentResultDTO {
+  items: FavoriteContentItemDTO[];
+  counts: Record<FavoriteContentType, number>;
+}
+
 export class ProfileContentService {
   static async listUserMoments(
     userId: string,
@@ -61,6 +78,108 @@ export class ProfileContentService {
       if (post.pet) dto.pet = PetService.toDTO(post.pet as never);
       if (post.circle) dto.circle = CommunityService.toCircleDTO(post.circle as never);
       return dto;
+    });
+  }
+
+  static async listFavorites(
+    userId: string,
+    type: FavoriteContentType = 'all',
+    limit: number = 20,
+  ): Promise<FavoriteContentResultDTO> {
+    const [posts, moments] = await Promise.all([
+      type === 'all' || type === 'post'
+        ? ProfileContentService.listFavoritePosts(userId, limit)
+        : Promise.resolve([]),
+      type === 'all' || type === 'moment'
+        ? ProfileContentService.listFavoriteMoments(userId, limit)
+        : Promise.resolve([]),
+    ]);
+
+    const allItems = [...posts, ...moments].sort(
+      (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
+    );
+
+    const counts: Record<FavoriteContentType, number> = {
+      all: posts.length + moments.length,
+      post: posts.length,
+      moment: moments.length,
+      knowledge: 0,
+      vet: 0,
+    };
+
+    const selectedItems = type === 'all'
+      ? allItems
+      : allItems.filter((item) => item.type === type);
+
+    return {
+      items: selectedItems.slice(0, limit),
+      counts,
+    };
+  }
+
+  private static async listFavoritePosts(
+    userId: string,
+    limit: number,
+  ): Promise<FavoriteContentItemDTO[]> {
+    const likes = await prisma.like.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        post: {
+          include: { author: true, pet: true, circle: true },
+        },
+      },
+    });
+
+    return likes.map((like) => {
+      const post = like.post;
+      const dto = CommunityService.toPostDTO({ ...post, isLiked: true });
+      if (post.author) dto.author = AuthService.toDTO(post.author as never);
+      if (post.pet) dto.pet = PetService.toDTO(post.pet as never);
+      if (post.circle) dto.circle = CommunityService.toCircleDTO(post.circle as never);
+      return {
+        id: post.id,
+        type: 'post',
+        savedAt: like.createdAt.toISOString(),
+        title: post.title || '社区帖子',
+        subtitle: post.content,
+        imageUrls: post.images,
+        payload: dto,
+      };
+    });
+  }
+
+  private static async listFavoriteMoments(
+    userId: string,
+    limit: number,
+  ): Promise<FavoriteContentItemDTO[]> {
+    const likes = await prisma.momentLike.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        moment: {
+          include: { user: true, pet: true },
+        },
+      },
+    });
+
+    return likes.map((like) => {
+      const moment = like.moment;
+      const dto = MomentService.toDTO(moment as never);
+      dto.isLiked = true;
+      if (moment.user) dto.author = AuthService.toDTO(moment.user as never);
+      if (moment.pet) dto.pet = PetService.toDTO(moment.pet as never);
+      return {
+        id: moment.id,
+        type: 'moment',
+        savedAt: like.createdAt.toISOString(),
+        title: moment.content.slice(0, 18) || '日常碎片',
+        subtitle: moment.content,
+        imageUrls: moment.images,
+        payload: dto,
+      };
     });
   }
 }

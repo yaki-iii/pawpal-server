@@ -13,6 +13,10 @@ const updateProfileSchema = z.object({
   avatarUrl: z.string().optional(),
   bio: z.string().max(200, '简介最多200字').optional(),
   city: z.string().max(50, '城市名最多50字').optional(),
+  defaultMomentVisibility: z.enum(['PUBLIC', 'FOLLOWERS', 'PRIVATE']).optional(),
+  profileVisibility: z.enum(['PUBLIC', 'AUTHENTICATED', 'FOLLOWERS']).optional(),
+  petVisibility: z.enum(['PUBLIC', 'FOLLOWERS', 'PRIVATE']).optional(),
+  searchable: z.boolean().optional(),
 });
 
 // ---- Specific routes (must come BEFORE parameterized /:userId routes) ----
@@ -44,6 +48,7 @@ router.get('/:userId/moments', optionalAuth, UserController.getUserMoments);
 
 // Liked posts as favorites MVP — private
 router.get('/:userId/liked-posts', requireAuth, UserController.getLikedPosts);
+router.get('/:userId/favorites', requireAuth, UserController.getFavorites);
 
 // Follow — requires auth
 router.post('/:userId/follow', requireAuth, UserController.toggleFollow);

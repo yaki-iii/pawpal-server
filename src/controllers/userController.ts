@@ -144,6 +144,36 @@ export class UserController {
   }
 
   /**
+   * GET /users/:userId/favorites — current user's aggregated favorites.
+   */
+  static async getFavorites(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) {
+        sendError(res, 401, '未授权');
+        return;
+      }
+      if (req.userId !== req.params.userId) {
+        sendError(res, 403, '无权访问该收藏列表', undefined, 403);
+        return;
+      }
+
+      const { type = 'all', limit = '20' } = req.query;
+      const normalizedType = ['all', 'post', 'moment', 'knowledge', 'vet'].includes(String(type))
+        ? String(type) as 'all' | 'post' | 'moment' | 'knowledge' | 'vet'
+        : 'all';
+
+      const favorites = await ProfileContentService.listFavorites(
+        req.params.userId,
+        normalizedType,
+        parseInt(limit as string, 10),
+      );
+      sendSuccess(res, favorites);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message);
+    }
+  }
+
+  /**
    * POST /users/:userId/follow — toggle follow
    */
   static async toggleFollow(req: Request, res: Response): Promise<void> {
