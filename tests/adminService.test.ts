@@ -6,6 +6,7 @@ jest.mock('../src/config/database', () => ({
     adminUser: {
       count: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -264,6 +265,57 @@ describe('AdminService', () => {
   });
 
   describe('admin monitoring', () => {
+    it('lists admin users without password hashes', async () => {
+      (prisma.adminUser.findMany as jest.Mock).mockResolvedValue([
+        {
+          ...activeSuperAdmin,
+          passwordHash: 'hashed-password',
+          lastLoginAt: new Date('2026-07-03T08:30:00Z'),
+        },
+        {
+          id: 'admin-2',
+          email: 'ops@example.com',
+          passwordHash: 'another-hash',
+          name: 'Ops',
+          role: 'OPS_ADMIN',
+          status: 'DISABLED',
+          lastLoginAt: null,
+          createdAt: new Date('2026-07-02T00:00:00Z'),
+          updatedAt: new Date('2026-07-02T00:00:00Z'),
+        },
+      ]);
+
+      const admins = await AdminService.listAdminUsers();
+
+      expect(prisma.adminUser.findMany).toHaveBeenCalledWith({
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      });
+      expect(admins).toEqual([
+        {
+          id: 'admin-1',
+          email: 'yaki_meng@163.com',
+          name: 'PawPal Admin',
+          role: 'SUPER_ADMIN',
+          status: 'ACTIVE',
+          lastLoginAt: '2026-07-03T08:30:00.000Z',
+          createdAt: '2026-07-03T00:00:00.000Z',
+          updatedAt: '2026-07-03T00:00:00.000Z',
+        },
+        {
+          id: 'admin-2',
+          email: 'ops@example.com',
+          name: 'Ops',
+          role: 'OPS_ADMIN',
+          status: 'DISABLED',
+          lastLoginAt: null,
+          createdAt: '2026-07-02T00:00:00.000Z',
+          updatedAt: '2026-07-02T00:00:00.000Z',
+        },
+      ]);
+      expect(JSON.stringify(admins)).not.toContain('passwordHash');
+      expect(JSON.stringify(admins)).not.toContain('hashed-password');
+    });
+
     it('returns AI, SOS, and system read-only metrics without secrets', async () => {
       (prisma.aiAssistantSession.count as jest.Mock)
         .mockResolvedValueOnce(12)

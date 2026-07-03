@@ -225,6 +225,13 @@ export class AdminService {
     return AdminService.toDTO(admin);
   }
 
+  static async listAdminUsers(): Promise<AdminDTO[]> {
+    const admins = await prisma.adminUser.findMany({
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+    });
+    return admins.map(AdminService.toDTO);
+  }
+
   static async getDashboardSummary(): Promise<{
     users: { total: number; suspended: number };
     pets: { total: number };

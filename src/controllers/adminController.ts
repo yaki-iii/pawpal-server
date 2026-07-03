@@ -71,6 +71,15 @@ export class AdminController {
     }
   }
 
+  static async listAdminUsers(_req: Request, res: Response): Promise<void> {
+    try {
+      const admins = await AdminService.listAdminUsers();
+      sendSuccess(res, admins);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '获取管理员列表失败', undefined, 500);
+    }
+  }
+
   static async listUsers(req: Request, res: Response): Promise<void> {
     try {
       const result = await AdminService.listUsers({

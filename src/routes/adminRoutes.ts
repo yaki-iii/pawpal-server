@@ -74,6 +74,7 @@ router.get('/dashboard/summary', requireAdmin, AdminController.getDashboardSumma
 router.get('/ai/metrics', requireAdmin, AdminController.getAIMetrics);
 router.get('/sos/metrics', requireAdmin, AdminController.getSOSMetrics);
 router.get('/system/status', requireAdmin, AdminController.getSystemStatus);
+router.get('/admin-users', requireAdmin, AdminController.listAdminUsers);
 
 router.get('/users', requireAdmin, validateQuery(listUsersQuerySchema), AdminController.listUsers);
 router.get('/users/:id', requireAdmin, validateParams(userIdParamsSchema), AdminController.getUserDetail);

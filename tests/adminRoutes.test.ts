@@ -18,6 +18,7 @@ jest.mock('../src/services/adminService', () => ({
     getAIMetrics: jest.fn(),
     getSOSMetrics: jest.fn(),
     getSystemStatus: jest.fn(),
+    listAdminUsers: jest.fn(),
     listUsers: jest.fn(),
     getUserDetail: jest.fn(),
     suspendUser: jest.fn(),
@@ -215,6 +216,22 @@ describe('admin HTTP layer', () => {
       expect(AdminService.getSOSMetrics).toHaveBeenCalled();
       expect(AdminService.getSystemStatus).toHaveBeenCalledWith(expect.any(String));
       expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('returns admin user list data', async () => {
+      (AdminService.listAdminUsers as jest.Mock).mockResolvedValue([activeAdmin]);
+      const req = {} as Request;
+      const res = mockResponse();
+
+      await AdminController.listAdminUsers(req, res);
+
+      expect(AdminService.listAdminUsers).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 0,
+        data: [activeAdmin],
+        message: 'success',
+      });
     });
 
     it('passes expanded content types to admin content service', async () => {
