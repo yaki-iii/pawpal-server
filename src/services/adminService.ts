@@ -7,6 +7,8 @@ import { logger } from '../utils/logger';
 type AdminRoleName = 'SUPER_ADMIN' | 'OPS_ADMIN' | 'CONTENT_MODERATOR' | 'SUPPORT' | 'READONLY';
 type AdminStatusName = 'ACTIVE' | 'DISABLED';
 type UserAccountStatusName = 'ACTIVE' | 'SUSPENDED';
+type AdminContentType = 'POST' | 'MOMENT';
+type AdminContentStatus = 'ACTIVE' | 'REMOVED';
 
 export interface AdminDTO {
   id: string;
@@ -45,6 +47,18 @@ interface SuspendUserInput {
 }
 
 interface UnsuspendUserInput {
+  reason: string;
+}
+
+interface ListContentQuery {
+  page?: number;
+  pageSize?: number;
+  type?: AdminContentType;
+  status?: AdminContentStatus;
+  search?: string;
+}
+
+interface ContentModerationInput {
   reason: string;
 }
 
@@ -383,6 +397,152 @@ export class AdminService {
     };
   }
 
+  static async listContent(query: ListContentQuery = {}): Promise<{
+    items: Array<Record<string, unknown>>;
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  }> {
+    const page = Math.max(1, query.page || 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize || 20));
+    const statusWhere = query.status === 'REMOVED'
+      ? { isRemoved: true }
+      : query.status === 'ACTIVE'
+        ? { isRemoved: false }
+        : {};
+    const search = query.search?.trim();
+    const windowSize = page * pageSize;
+
+    const [postTotal, momentTotal, posts, moments] = await Promise.all([
+      query.type === 'MOMENT' ? Promise.resolve(0) : prisma.post.count({
+        where: {
+          ...statusWhere,
+          ...(search ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { content: { contains: search, mode: 'insensitive' } },
+            ],
+          } : {}),
+        },
+      }),
+      query.type === 'POST' ? Promise.resolve(0) : prisma.moment.count({
+        where: {
+          ...statusWhere,
+          ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}),
+        },
+      }),
+      query.type === 'MOMENT' ? Promise.resolve([]) : prisma.post.findMany({
+        where: {
+          ...statusWhere,
+          ...(search ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { content: { contains: search, mode: 'insensitive' } },
+            ],
+          } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: windowSize,
+        include: {
+          author: { select: { id: true, email: true, nickname: true, avatar: true } },
+          pet: { select: { id: true, name: true, avatar: true } },
+          circle: { select: { id: true, name: true } },
+        },
+      }),
+      query.type === 'POST' ? Promise.resolve([]) : prisma.moment.findMany({
+        where: {
+          ...statusWhere,
+          ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        take: windowSize,
+        include: {
+          user: { select: { id: true, email: true, nickname: true, avatar: true } },
+          pet: { select: { id: true, name: true, avatar: true } },
+        },
+      }),
+    ]);
+
+    const items = [
+      ...posts.map(AdminService.toAdminPostListItem),
+      ...moments.map(AdminService.toAdminMomentListItem),
+    ].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+    const total = postTotal + momentTotal;
+    const start = (page - 1) * pageSize;
+
+    return {
+      items: items.slice(start, start + pageSize),
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  static async removeContent(
+    actor: AdminActor,
+    type: AdminContentType,
+    id: string,
+    input: ContentModerationInput,
+    context: AdminRequestContext = {},
+  ): Promise<Record<string, unknown>> {
+    return AdminService.setContentRemoved(actor, type, id, true, input.reason, context);
+  }
+
+  static async restoreContent(
+    actor: AdminActor,
+    type: AdminContentType,
+    id: string,
+    input: ContentModerationInput,
+    context: AdminRequestContext = {},
+  ): Promise<Record<string, unknown>> {
+    return AdminService.setContentRemoved(actor, type, id, false, input.reason, context);
+  }
+
+  private static async setContentRemoved(
+    actor: AdminActor,
+    type: AdminContentType,
+    id: string,
+    isRemoved: boolean,
+    reason: string,
+    context: AdminRequestContext,
+  ): Promise<Record<string, unknown>> {
+    if (type === 'POST') {
+      const before = await prisma.post.findUnique({ where: { id } });
+      if (!before) throw new Error('动态不存在');
+
+      const after = await prisma.post.update({ where: { id }, data: { isRemoved } });
+      await AdminService.writeAuditLog({
+        adminUserId: actor.id,
+        action: isRemoved ? 'POST_REMOVE' : 'POST_RESTORE',
+        targetType: 'POST',
+        targetId: id,
+        reason,
+        beforeSnapshot: before,
+        afterSnapshot: after,
+        context,
+      });
+      return AdminService.toAdminPostListItem(after);
+    }
+
+    const before = await prisma.moment.findUnique({ where: { id } });
+    if (!before) throw new Error('日常不存在');
+
+    const after = await prisma.moment.update({ where: { id }, data: { isRemoved } });
+    await AdminService.writeAuditLog({
+      adminUserId: actor.id,
+      action: isRemoved ? 'MOMENT_REMOVE' : 'MOMENT_RESTORE',
+      targetType: 'MOMENT',
+      targetId: id,
+      reason,
+      beforeSnapshot: before,
+      afterSnapshot: after,
+      context,
+    });
+    return AdminService.toAdminMomentListItem(after);
+  }
+
   static async writeAuditLog(input: {
     adminUserId?: string | null;
     action: string;
@@ -455,6 +615,60 @@ export class AdminService {
             posts: user._count.posts || 0,
           }
         : undefined,
+    };
+  }
+
+  private static toAdminPostListItem(post: Record<string, any>): Record<string, unknown> {
+    return {
+      id: post.id,
+      type: 'POST',
+      title: post.title,
+      content: post.content,
+      images: post.images || [],
+      status: post.isRemoved ? 'REMOVED' : 'ACTIVE',
+      likeCount: post.likeCount || 0,
+      commentCount: post.commentCount || 0,
+      createdAt: post.createdAt.toISOString(),
+      updatedAt: post.updatedAt.toISOString(),
+      author: post.author ? AdminService.toAdminAuthor(post.author) : undefined,
+      pet: post.pet ? AdminService.toAdminPet(post.pet) : undefined,
+      circle: post.circle ? { id: post.circle.id, name: post.circle.name } : undefined,
+    };
+  }
+
+  private static toAdminMomentListItem(moment: Record<string, any>): Record<string, unknown> {
+    return {
+      id: moment.id,
+      type: 'MOMENT',
+      title: '日常',
+      content: moment.content,
+      images: moment.images || [],
+      videos: moment.videos || [],
+      status: moment.isRemoved ? 'REMOVED' : 'ACTIVE',
+      visibility: moment.visibility || 'PUBLIC',
+      likeCount: moment.likeCount || 0,
+      commentCount: moment.commentCount || 0,
+      createdAt: moment.createdAt.toISOString(),
+      updatedAt: moment.updatedAt.toISOString(),
+      author: moment.user ? AdminService.toAdminAuthor(moment.user) : undefined,
+      pet: moment.pet ? AdminService.toAdminPet(moment.pet) : undefined,
+    };
+  }
+
+  private static toAdminAuthor(user: Record<string, any>): Record<string, unknown> {
+    return {
+      id: user.id,
+      email: user.email,
+      nickname: user.nickname,
+      avatar: user.avatar,
+    };
+  }
+
+  private static toAdminPet(pet: Record<string, any>): Record<string, unknown> {
+    return {
+      id: pet.id,
+      name: pet.name,
+      avatar: pet.avatar,
     };
   }
 }

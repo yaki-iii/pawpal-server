@@ -28,6 +28,21 @@ const paginationQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
+const listContentQuerySchema = paginationQuerySchema.extend({
+  type: z.enum(['POST', 'MOMENT']).optional(),
+  status: z.enum(['ACTIVE', 'REMOVED']).optional(),
+  search: z.string().optional(),
+});
+
+const contentParamsSchema = z.object({
+  type: z.enum(['POST', 'MOMENT']),
+  id: z.string().min(1, '缺少内容 ID'),
+});
+
+const contentModerationSchema = z.object({
+  reason: z.string().min(1, '请输入处理原因').max(200, '处理原因最多200字'),
+});
+
 const suspendUserSchema = z.object({
   reason: z.string().min(1, '请输入冻结原因').max(200, '冻结原因最多200字'),
   suspendedUntil: z.string().datetime().nullable().optional(),
@@ -59,6 +74,24 @@ router.post(
   validateParams(userIdParamsSchema),
   validateBody(unsuspendUserSchema),
   AdminController.unsuspendUser,
+);
+
+router.get('/content', requireAdmin, validateQuery(listContentQuerySchema), AdminController.listContent);
+router.post(
+  '/content/:type/:id/remove',
+  requireAdmin,
+  requireAdminRole(['OPS_ADMIN', 'CONTENT_MODERATOR']),
+  validateParams(contentParamsSchema),
+  validateBody(contentModerationSchema),
+  AdminController.removeContent,
+);
+router.post(
+  '/content/:type/:id/restore',
+  requireAdmin,
+  requireAdminRole(['OPS_ADMIN', 'CONTENT_MODERATOR']),
+  validateParams(contentParamsSchema),
+  validateBody(contentModerationSchema),
+  AdminController.restoreContent,
 );
 
 router.get(

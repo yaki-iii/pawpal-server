@@ -248,7 +248,7 @@ describe('MomentService', () => {
       expect(result.items).toHaveLength(1);
       expect(prisma.moment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { petId: 'pet-1', visibility: 'PUBLIC' },
+          where: { petId: 'pet-1', visibility: 'PUBLIC', isRemoved: false },
           orderBy: { createdAt: 'desc' },
           take: 11, // limit + 1
         }),

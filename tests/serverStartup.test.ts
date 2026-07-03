@@ -67,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.6 admin password reset build id', async () => {
+  it('exposes the current v0.6 admin content build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v06-admin-reset-20260703');
+    expect(BUILD_ID).toBe('pawpal-v06-admin-content-20260703');
   });
 });

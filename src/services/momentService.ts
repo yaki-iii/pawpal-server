@@ -74,6 +74,7 @@ export class MomentService {
 
     const where: Record<string, unknown> = {
       petId,
+      isRemoved: false,
       visibility: await MomentService.visibilityFilterForPetViewer(pet.userId, userId),
     };
     if (cursor) {
@@ -143,7 +144,7 @@ export class MomentService {
       return { items: [], nextCursor: null };
     }
 
-    const where: Record<string, unknown> = { petId: { in: petIds } };
+    const where: Record<string, unknown> = { petId: { in: petIds }, isRemoved: false };
     if (followingOnly) {
       where.visibility = { in: ['PUBLIC', 'FOLLOWERS'] };
     } else {
@@ -193,7 +194,7 @@ export class MomentService {
    */
   static async deleteMoment(momentId: string, userId: string): Promise<void> {
     const moment = await prisma.moment.findUnique({ where: { id: momentId } });
-    if (!moment) throw new Error('碎片不存在');
+    if (!moment || (moment as { isRemoved?: boolean }).isRemoved) throw new Error('碎片不存在');
     if (moment.userId !== userId) throw new Error('无权删除该碎片');
 
     await prisma.moment.delete({ where: { id: momentId } });
@@ -205,7 +206,7 @@ export class MomentService {
    */
   static async promoteToDiary(momentId: string, userId: string): Promise<GrowthDiaryEntryDTO> {
     const moment = await prisma.moment.findUnique({ where: { id: momentId } });
-    if (!moment) throw new Error('碎片不存在');
+    if (!moment || (moment as { isRemoved?: boolean }).isRemoved) throw new Error('碎片不存在');
     if (moment.userId !== userId) throw new Error('无权升级该碎片');
 
     const entry = await prisma.growthDiaryEntry.create({
@@ -253,7 +254,7 @@ export class MomentService {
     parentId?: string,
   ): Promise<MomentCommentDTO> {
     const moment = await prisma.moment.findUnique({ where: { id: momentId } });
-    if (!moment) throw new Error('碎片不存在');
+    if (!moment || (moment as { isRemoved?: boolean }).isRemoved) throw new Error('碎片不存在');
 
     if (parentId) {
       const parent = await prisma.momentComment.findUnique({ where: { id: parentId } });
@@ -295,7 +296,7 @@ export class MomentService {
    */
   static async toggleLike(momentId: string, userId: string): Promise<{ liked: boolean }> {
     const moment = await prisma.moment.findUnique({ where: { id: momentId } });
-    if (!moment) throw new Error('碎片不存在');
+    if (!moment || (moment as { isRemoved?: boolean }).isRemoved) throw new Error('碎片不存在');
 
     const existing = await prisma.momentLike.findUnique({
       where: { userId_momentId: { userId, momentId } },

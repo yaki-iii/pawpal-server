@@ -20,6 +20,9 @@ jest.mock('../src/services/adminService', () => ({
     suspendUser: jest.fn(),
     unsuspendUser: jest.fn(),
     listAuditLogs: jest.fn(),
+    listContent: jest.fn(),
+    removeContent: jest.fn(),
+    restoreContent: jest.fn(),
   },
 }));
 
@@ -168,6 +171,57 @@ describe('admin HTTP layer', () => {
 
       expect(res.status).toHaveBeenCalledWith(401);
       expect(AdminService.suspendUser).not.toHaveBeenCalled();
+    });
+
+    it('returns admin content list data', async () => {
+      (AdminService.listContent as jest.Mock).mockResolvedValue({
+        items: [{ id: 'post-1', type: 'POST', status: 'ACTIVE' }],
+        meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+      });
+      const req = {
+        query: { page: '1', pageSize: '20', type: 'POST', status: 'ACTIVE' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.listContent(req, res);
+
+      expect(AdminService.listContent).toHaveBeenCalledWith({
+        page: 1,
+        pageSize: 20,
+        type: 'POST',
+        status: 'ACTIVE',
+        search: undefined,
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('removes content with admin actor and request context', async () => {
+      (AdminService.removeContent as jest.Mock).mockResolvedValue({
+        id: 'post-1',
+        type: 'POST',
+        status: 'REMOVED',
+      });
+      const req = {
+        admin: activeAdmin,
+        params: { type: 'POST', id: 'post-1' },
+        body: { reason: '违规内容' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.removeContent(req, res);
+
+      expect(AdminService.removeContent).toHaveBeenCalledWith(
+        activeAdmin,
+        'POST',
+        'post-1',
+        { reason: '违规内容' },
+        { ipAddress: '127.0.0.1', userAgent: 'jest' },
+      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+        message: '内容已隐藏',
+      }));
     });
   });
 });

@@ -25,9 +25,15 @@ jest.mock('../src/config/database', () => ({
     },
     moment: {
       count: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
     post: {
       count: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
   },
 }));
@@ -369,6 +375,139 @@ describe('AdminService', () => {
           targetType: 'USER',
           targetId: 'user-1',
           reason: '申诉通过',
+        }),
+      });
+    });
+  });
+
+  describe('content moderation', () => {
+    const actor = {
+      id: 'admin-1',
+      email: 'admin@example.com',
+      name: 'Admin',
+      role: 'CONTENT_MODERATOR',
+      status: 'ACTIVE',
+      lastLoginAt: null,
+      createdAt: '2026-07-03T00:00:00.000Z',
+      updatedAt: '2026-07-03T00:00:00.000Z',
+    };
+
+    it('returns a mixed paginated content list', async () => {
+      const createdAt = new Date('2026-07-03T01:00:00Z');
+      (prisma.post.count as jest.Mock).mockResolvedValue(1);
+      (prisma.moment.count as jest.Mock).mockResolvedValue(1);
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([{
+        id: 'post-1',
+        title: '动态标题',
+        content: '动态内容',
+        images: [],
+        isRemoved: false,
+        likeCount: 2,
+        commentCount: 1,
+        createdAt,
+        updatedAt: createdAt,
+        author: { id: 'user-1', email: 'u@example.com', nickname: '用户', avatar: '' },
+        pet: null,
+        circle: { id: 'circle-1', name: '猫咪圈' },
+      }]);
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([{
+        id: 'moment-1',
+        content: '日常内容',
+        images: ['image.jpg'],
+        videos: [],
+        isRemoved: false,
+        visibility: 'PUBLIC',
+        likeCount: 0,
+        commentCount: 0,
+        createdAt: new Date('2026-07-03T02:00:00Z'),
+        updatedAt: new Date('2026-07-03T02:00:00Z'),
+        user: { id: 'user-2', email: 'm@example.com', nickname: '日常用户', avatar: '' },
+        pet: { id: 'pet-1', name: '小白', avatar: '' },
+      }]);
+
+      const result = await AdminService.listContent({ page: 1, pageSize: 20, status: 'ACTIVE' });
+
+      expect(result.meta).toEqual({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
+      expect(result.items.map((item) => item.type)).toEqual(['MOMENT', 'POST']);
+      expect(prisma.post.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ isRemoved: false }),
+      }));
+      expect(prisma.moment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ isRemoved: false }),
+      }));
+    });
+
+    it('removes a post and writes an audit log', async () => {
+      const before = {
+        id: 'post-1',
+        title: '动态标题',
+        content: '动态内容',
+        images: [],
+        isRemoved: false,
+        likeCount: 0,
+        commentCount: 0,
+        createdAt: new Date('2026-07-03T00:00:00Z'),
+        updatedAt: new Date('2026-07-03T00:00:00Z'),
+      };
+      const after = { ...before, isRemoved: true };
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(before);
+      (prisma.post.update as jest.Mock).mockResolvedValue(after);
+      (prisma.adminAuditLog.create as jest.Mock).mockResolvedValue({});
+
+      const result = await AdminService.removeContent(actor, 'POST', 'post-1', {
+        reason: '违规内容',
+      });
+
+      expect(result.status).toBe('REMOVED');
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        data: { isRemoved: true },
+      });
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          adminUserId: 'admin-1',
+          action: 'POST_REMOVE',
+          targetType: 'POST',
+          targetId: 'post-1',
+          reason: '违规内容',
+        }),
+      });
+    });
+
+    it('restores a moment and writes an audit log', async () => {
+      const before = {
+        id: 'moment-1',
+        content: '日常内容',
+        images: [],
+        videos: [],
+        isRemoved: true,
+        visibility: 'PUBLIC',
+        likeCount: 0,
+        commentCount: 0,
+        createdAt: new Date('2026-07-03T00:00:00Z'),
+        updatedAt: new Date('2026-07-03T00:00:00Z'),
+      };
+      const after = { ...before, isRemoved: false };
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(before);
+      (prisma.moment.update as jest.Mock).mockResolvedValue(after);
+      (prisma.adminAuditLog.create as jest.Mock).mockResolvedValue({});
+
+      const result = await AdminService.restoreContent(actor, 'MOMENT', 'moment-1', {
+        reason: '复核通过',
+      });
+
+      expect(result.status).toBe('ACTIVE');
+      expect(prisma.moment.update).toHaveBeenCalledWith({
+        where: { id: 'moment-1' },
+        data: { isRemoved: false },
+      });
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          adminUserId: 'admin-1',
+          action: 'MOMENT_RESTORE',
+          targetType: 'MOMENT',
+          targetId: 'moment-1',
+          reason: '复核通过',
         }),
       });
     });

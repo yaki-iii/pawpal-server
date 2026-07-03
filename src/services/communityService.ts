@@ -94,7 +94,7 @@ export class CommunityService {
       },
     });
 
-    if (!post) {
+    if (!post || post.isRemoved) {
       throw new Error('动态不存在');
     }
 
@@ -119,7 +119,7 @@ export class CommunityService {
    */
   static async deletePost(postId: string, userId: string): Promise<void> {
     const post = await prisma.post.findUnique({ where: { id: postId } });
-    if (!post) {
+    if (!post || post.isRemoved) {
       throw new Error('动态不存在');
     }
     if (post.userId !== userId) {
@@ -144,7 +144,7 @@ export class CommunityService {
    */
   static async toggleLike(postId: string, userId: string): Promise<{ liked: boolean }> {
     const post = await prisma.post.findUnique({ where: { id: postId } });
-    if (!post) {
+    if (!post || post.isRemoved) {
       throw new Error('动态不存在');
     }
 
@@ -539,7 +539,7 @@ export class CommunityService {
     cursor?: string,
     limit: number = 10,
   ): Promise<PaginatedResult<PostDTO>> {
-    const where: Record<string, unknown> = { userId };
+    const where: Record<string, unknown> = { userId, isRemoved: false };
     if (cursor) {
       where.createdAt = { lt: new Date(cursor) };
     }
