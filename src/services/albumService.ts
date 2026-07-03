@@ -77,10 +77,11 @@ export class AlbumService {
     }
 
     for (const entry of diaryEntries) {
-      if (entry.photos.length === 0 && entry.videos.length === 0) continue;
+      const isManualMilestone = (entry.mood || '').toLowerCase() === 'milestone';
+      if (entry.photos.length === 0 && entry.videos.length === 0 && !isManualMilestone) continue;
       items.push({
         id: entry.id,
-        type: 'diary',
+        type: isManualMilestone ? 'milestone' : 'diary',
         title: entry.title || '成长日记',
         detail: entry.content,
         imageUrls: entry.photos,

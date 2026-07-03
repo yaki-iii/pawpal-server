@@ -92,6 +92,46 @@ describe('AlbumService', () => {
       });
     });
 
+    it('should include manual milestone diary entries without requiring media', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue({ ...mockPet, birthday: null });
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.healthRecord.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.growthDiaryEntry.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'milestone-1',
+          title: '第一次坐车出门',
+          content: '今天很勇敢，路上没有紧张。',
+          mood: 'milestone',
+          photos: [],
+          videos: [],
+          createdAt: new Date('2026-07-03T12:00:00Z'),
+        },
+        {
+          id: 'empty-note',
+          title: '普通记录',
+          content: '没有媒体，也不是里程碑。',
+          mood: '',
+          photos: [],
+          videos: [],
+          createdAt: new Date('2026-07-02T12:00:00Z'),
+        },
+      ]);
+
+      const album = await AlbumService.getPetAlbum('pet-1', 'user-1');
+
+      expect(album.groups).toHaveLength(1);
+      expect(album.groups[0].items).toEqual([
+        expect.objectContaining({
+          id: 'milestone-1',
+          type: 'milestone',
+          title: '第一次坐车出门',
+          detail: '今天很勇敢，路上没有紧张。',
+          imageUrls: [],
+          videoUrls: [],
+        }),
+      ]);
+    });
+
     it('should throw when pet does not exist', async () => {
       (prisma.pet.findUnique as jest.Mock).mockResolvedValue(null);
 
