@@ -114,6 +114,7 @@ router.post(
 );
 
 router.get('/reports', requireAdmin, validateQuery(listReportsQuerySchema), AdminController.listReports);
+router.get('/reports/:id', requireAdmin, validateParams(reportIdParamsSchema), AdminController.getReportDetail);
 router.post(
   '/reports/:id/handle',
   requireAdmin,

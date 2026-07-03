@@ -28,6 +28,7 @@ jest.mock('../src/services/adminService', () => ({
     removeContent: jest.fn(),
     restoreContent: jest.fn(),
     listReports: jest.fn(),
+    getReportDetail: jest.fn(),
     handleReport: jest.fn(),
   },
 }));
@@ -311,6 +312,32 @@ describe('admin HTTP layer', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         message: '举报已处理',
       }));
+    });
+
+    it('returns a report detail', async () => {
+      (AdminService.getReportDetail as jest.Mock).mockResolvedValue({
+        id: 'report-1',
+        status: 'PENDING',
+        reporter: { id: 'user-1', email: 'reporter@example.com' },
+      });
+      const req = {
+        params: { id: 'report-1' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.getReportDetail(req, res);
+
+      expect(AdminService.getReportDetail).toHaveBeenCalledWith('report-1');
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 0,
+        data: {
+          id: 'report-1',
+          status: 'PENDING',
+          reporter: { id: 'user-1', email: 'reporter@example.com' },
+        },
+        message: 'success',
+      });
     });
   });
 });

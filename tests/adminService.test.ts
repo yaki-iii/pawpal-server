@@ -802,6 +802,58 @@ describe('AdminService', () => {
       }));
     });
 
+    it('returns a report detail with reporter and target owner summaries', async () => {
+      const createdAt = new Date('2026-07-03T00:00:00Z');
+      (prisma.contentReport.findUnique as jest.Mock).mockResolvedValue({
+        id: 'report-1',
+        reporterId: 'reporter-1',
+        targetType: 'POST',
+        targetId: 'post-1',
+        targetOwnerId: 'author-1',
+        reason: 'FALSE_MEDICAL',
+        note: '危险建议',
+        status: 'PENDING',
+        duplicateCount: 2,
+        resolutionAction: null,
+        resolutionNote: '',
+        handledByAdminId: null,
+        handledAt: null,
+        createdAt,
+        updatedAt: createdAt,
+        lastReportedAt: createdAt,
+      });
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'reporter-1',
+          email: 'reporter@example.com',
+          nickname: '举报人',
+          avatar: '',
+        },
+        {
+          id: 'author-1',
+          email: 'author@example.com',
+          nickname: '作者',
+          avatar: '',
+        },
+      ]);
+
+      const detail = await AdminService.getReportDetail('report-1');
+
+      expect(prisma.contentReport.findUnique).toHaveBeenCalledWith({
+        where: { id: 'report-1' },
+      });
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { id: { in: ['reporter-1', 'author-1'] } },
+        select: { id: true, email: true, nickname: true, avatar: true },
+      });
+      expect(detail).toEqual(expect.objectContaining({
+        id: 'report-1',
+        duplicateCount: 2,
+        reporter: expect.objectContaining({ email: 'reporter@example.com' }),
+        targetOwner: expect.objectContaining({ email: 'author@example.com' }),
+      }));
+    });
+
     it('resolves a report by hiding the reported post and writing an audit log', async () => {
       const createdAt = new Date('2026-07-03T00:00:00Z');
       const report = {

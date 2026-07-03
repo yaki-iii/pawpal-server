@@ -212,6 +212,15 @@ export class AdminController {
     }
   }
 
+  static async getReportDetail(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await AdminService.getReportDetail(req.params.id);
+      sendSuccess(res, result);
+    } catch (error) {
+      sendError(res, 404, (error as Error).message || '举报不存在', undefined, 404);
+    }
+  }
+
   static async handleReport(req: Request, res: Response): Promise<void> {
     if (!req.admin) {
       sendError(res, 401, '未授权', undefined, 401);

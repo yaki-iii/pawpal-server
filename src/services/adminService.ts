@@ -758,6 +758,29 @@ export class AdminService {
     };
   }
 
+  static async getReportDetail(reportId: string): Promise<Record<string, unknown>> {
+    const report = await prisma.contentReport.findUnique({ where: { id: reportId } });
+    if (!report) throw new Error('举报不存在');
+
+    const relatedUserIds = Array.from(new Set([
+      report.reporterId,
+      report.targetOwnerId,
+    ].filter(Boolean)));
+    const users = relatedUserIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: relatedUserIds } },
+          select: { id: true, email: true, nickname: true, avatar: true },
+        })
+      : [];
+    const usersById = new Map(users.map((user) => [user.id, user]));
+
+    return {
+      ...AdminService.toAdminReportListItem(report),
+      reporter: report.reporterId ? AdminService.toAdminAuthor(usersById.get(report.reporterId) || {}) : null,
+      targetOwner: report.targetOwnerId ? AdminService.toAdminAuthor(usersById.get(report.targetOwnerId) || {}) : null,
+    };
+  }
+
   static async handleReport(
     actor: AdminActor,
     reportId: string,
