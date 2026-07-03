@@ -35,9 +35,11 @@ export class AdminController {
     sendSuccess(res, req.admin);
   }
 
-  static async getDashboardSummary(_req: Request, res: Response): Promise<void> {
+  static async getDashboardSummary(req: Request, res: Response): Promise<void> {
     try {
-      const summary = await AdminService.getDashboardSummary();
+      const summary = await AdminService.getDashboardSummary({
+        range: req.query.range as 'today' | '7d' | '30d' | undefined,
+      });
       sendSuccess(res, summary);
     } catch (error) {
       sendError(res, 500, (error as Error).message || '获取后台统计失败', undefined, 500);

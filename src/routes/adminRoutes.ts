@@ -28,6 +28,10 @@ const paginationQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 });
 
+const dashboardQuerySchema = z.object({
+  range: z.enum(['today', '7d', '30d']).optional(),
+});
+
 const auditLogsQuerySchema = paginationQuerySchema.extend({
   action: z.string().optional(),
   targetType: z.string().optional(),
@@ -78,7 +82,7 @@ const unsuspendUserSchema = z.object({
 router.post('/auth/login', authRateLimiter, validateBody(loginSchema), AdminController.login);
 router.get('/auth/me', requireAdmin, AdminController.getMe);
 
-router.get('/dashboard/summary', requireAdmin, AdminController.getDashboardSummary);
+router.get('/dashboard/summary', requireAdmin, validateQuery(dashboardQuerySchema), AdminController.getDashboardSummary);
 router.get('/ai/metrics', requireAdmin, AdminController.getAIMetrics);
 router.get('/sos/metrics', requireAdmin, AdminController.getSOSMetrics);
 router.get('/system/status', requireAdmin, AdminController.getSystemStatus);

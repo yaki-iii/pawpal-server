@@ -262,6 +262,33 @@ describe('AdminService', () => {
         reports: { pending: 3 },
       });
     });
+
+    it('applies a dashboard range to period counts', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-07-04T12:00:00Z'));
+      (prisma.user.count as jest.Mock).mockResolvedValueOnce(12).mockResolvedValueOnce(2).mockResolvedValueOnce(4);
+      (prisma.pet.count as jest.Mock).mockResolvedValueOnce(9).mockResolvedValueOnce(3);
+      (prisma.moment.count as jest.Mock).mockResolvedValueOnce(20).mockResolvedValueOnce(6);
+      (prisma.post.count as jest.Mock).mockResolvedValueOnce(7).mockResolvedValueOnce(2);
+      (prisma.contentReport.count as jest.Mock).mockResolvedValueOnce(3).mockResolvedValueOnce(1);
+
+      const summary = await AdminService.getDashboardSummary({ range: '7d' });
+
+      const since = new Date('2026-06-28T00:00:00.000Z');
+      expect(prisma.user.count).toHaveBeenNthCalledWith(3, { where: { createdAt: { gte: since } } });
+      expect(prisma.pet.count).toHaveBeenNthCalledWith(2, { where: { createdAt: { gte: since } } });
+      expect(prisma.moment.count).toHaveBeenNthCalledWith(2, { where: { createdAt: { gte: since } } });
+      expect(prisma.post.count).toHaveBeenNthCalledWith(2, { where: { createdAt: { gte: since } } });
+      expect(prisma.contentReport.count).toHaveBeenNthCalledWith(2, { where: { createdAt: { gte: since } } });
+      expect(summary.period).toEqual({
+        range: '7d',
+        users: 4,
+        pets: 3,
+        moments: 6,
+        posts: 2,
+        reports: 1,
+      });
+      jest.useRealTimers();
+    });
   });
 
   describe('admin monitoring', () => {

@@ -11,6 +11,7 @@ type AdminContentType = 'POST' | 'MOMENT' | 'COMMENT' | 'MOMENT_COMMENT' | 'CIRC
 type AdminContentStatus = 'ACTIVE' | 'REMOVED';
 type ReportStatusName = 'PENDING' | 'REVIEWING' | 'RESOLVED' | 'REJECTED';
 type ReportResolutionActionName = 'NO_ACTION' | 'HIDE_CONTENT' | 'RESTORE_CONTENT' | 'WARN_USER' | 'SUSPEND_USER';
+type DashboardRange = 'today' | '7d' | '30d';
 
 export interface AdminDTO {
   id: string;
@@ -41,6 +42,10 @@ interface ListUsersQuery {
   pageSize?: number;
   search?: string;
   accountStatus?: UserAccountStatusName;
+}
+
+interface DashboardSummaryQuery {
+  range?: DashboardRange;
 }
 
 interface SuspendUserInput {
@@ -242,11 +247,19 @@ export class AdminService {
     return admins.map(AdminService.toDTO);
   }
 
-  static async getDashboardSummary(): Promise<{
+  static async getDashboardSummary(query: DashboardSummaryQuery = {}): Promise<{
     users: { total: number; suspended: number };
     pets: { total: number };
     content: { moments: number; posts: number };
     reports: { pending: number };
+    period?: {
+      range: DashboardRange;
+      users: number;
+      pets: number;
+      moments: number;
+      posts: number;
+      reports: number;
+    };
   }> {
     const [totalUsers, suspendedUsers, totalPets, moments, posts, pendingReports] = await Promise.all([
       prisma.user.count(),
@@ -257,11 +270,35 @@ export class AdminService {
       prisma.contentReport.count({ where: { status: 'PENDING' } }),
     ]);
 
-    return {
+    const summary = {
       users: { total: totalUsers, suspended: suspendedUsers },
       pets: { total: totalPets },
       content: { moments, posts },
       reports: { pending: pendingReports },
+    };
+
+    if (!query.range) return summary;
+
+    const since = AdminService.startForDashboardRange(query.range);
+    const periodWhere = { createdAt: { gte: since } };
+    const [periodUsers, periodPets, periodMoments, periodPosts, periodReports] = await Promise.all([
+      prisma.user.count({ where: periodWhere }),
+      prisma.pet.count({ where: periodWhere }),
+      prisma.moment.count({ where: periodWhere }),
+      prisma.post.count({ where: periodWhere }),
+      prisma.contentReport.count({ where: periodWhere }),
+    ]);
+
+    return {
+      ...summary,
+      period: {
+        range: query.range,
+        users: periodUsers,
+        pets: periodPets,
+        moments: periodMoments,
+        posts: periodPosts,
+        reports: periodReports,
+      },
     };
   }
 
@@ -1039,6 +1076,14 @@ export class AdminService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return today;
+  }
+
+  private static startForDashboardRange(range: DashboardRange): Date {
+    const now = new Date();
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    if (range === '7d') start.setDate(start.getDate() - 6);
+    if (range === '30d') start.setDate(start.getDate() - 29);
+    return start;
   }
 
   private static hasConfiguredSecret(value: string | undefined, placeholders: string[] = []): boolean {

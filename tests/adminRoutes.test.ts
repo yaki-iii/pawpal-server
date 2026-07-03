@@ -220,6 +220,25 @@ describe('admin HTTP layer', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
+    it('passes dashboard range to admin service', async () => {
+      (AdminService.getDashboardSummary as jest.Mock).mockResolvedValue({
+        users: { total: 12, suspended: 2 },
+        pets: { total: 9 },
+        content: { moments: 20, posts: 7 },
+        reports: { pending: 3 },
+        period: { range: '30d', users: 5, pets: 4, moments: 8, posts: 3, reports: 1 },
+      });
+      const req = {
+        query: { range: '30d' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.getDashboardSummary(req, res);
+
+      expect(AdminService.getDashboardSummary).toHaveBeenCalledWith({ range: '30d' });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
     it('returns admin user list data', async () => {
       (AdminService.listAdminUsers as jest.Mock).mockResolvedValue([activeAdmin]);
       const req = {} as Request;
