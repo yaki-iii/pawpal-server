@@ -230,10 +230,11 @@ export class MomentService {
    */
   static async listComments(momentId: string): Promise<MomentCommentDTO[]> {
     const comments = await prisma.momentComment.findMany({
-      where: { momentId, parentId: null },
+      where: { momentId, parentId: null, isRemoved: false },
       include: {
         author: true,
         replies: {
+          where: { isRemoved: false },
           include: { author: true },
           orderBy: { createdAt: 'asc' },
         },

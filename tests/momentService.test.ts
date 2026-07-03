@@ -492,8 +492,13 @@ describe('MomentService', () => {
       expect(comments[0].replies).toHaveLength(1);
       expect(prisma.momentComment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { momentId: 'moment-1', parentId: null },
+          where: { momentId: 'moment-1', parentId: null, isRemoved: false },
           orderBy: { createdAt: 'desc' },
+          include: expect.objectContaining({
+            replies: expect.objectContaining({
+              where: { isRemoved: false },
+            }),
+          }),
         }),
       );
     });

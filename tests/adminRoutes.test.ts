@@ -197,6 +197,28 @@ describe('admin HTTP layer', () => {
       expect(res.status).toHaveBeenCalledWith(200);
     });
 
+    it('passes expanded content types to admin content service', async () => {
+      (AdminService.listContent as jest.Mock).mockResolvedValue({
+        items: [{ id: 'comment-1', type: 'COMMENT', status: 'ACTIVE' }],
+        meta: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+      });
+      const req = {
+        query: { type: 'COMMENT', search: '评论' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.listContent(req, res);
+
+      expect(AdminService.listContent).toHaveBeenCalledWith({
+        page: 1,
+        pageSize: 20,
+        type: 'COMMENT',
+        status: undefined,
+        search: '评论',
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
     it('removes content with admin actor and request context', async () => {
       (AdminService.removeContent as jest.Mock).mockResolvedValue({
         id: 'post-1',

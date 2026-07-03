@@ -111,7 +111,7 @@ export class AdminController {
       const result = await AdminService.listContent({
         page: Number(req.query.page || 1),
         pageSize: Number(req.query.pageSize || 20),
-        type: req.query.type as 'POST' | 'MOMENT' | undefined,
+        type: req.query.type as 'POST' | 'MOMENT' | 'COMMENT' | 'MOMENT_COMMENT' | 'CIRCLE' | undefined,
         status: req.query.status as 'ACTIVE' | 'REMOVED' | undefined,
         search: typeof req.query.search === 'string' ? req.query.search : undefined,
       });
@@ -130,7 +130,7 @@ export class AdminController {
     try {
       const content = await AdminService.removeContent(
         req.admin,
-        req.params.type as 'POST' | 'MOMENT',
+        req.params.type as 'POST' | 'MOMENT' | 'COMMENT' | 'MOMENT_COMMENT' | 'CIRCLE',
         req.params.id,
         req.body,
         requestContext(req),
@@ -150,7 +150,7 @@ export class AdminController {
     try {
       const content = await AdminService.restoreContent(
         req.admin,
-        req.params.type as 'POST' | 'MOMENT',
+        req.params.type as 'POST' | 'MOMENT' | 'COMMENT' | 'MOMENT_COMMENT' | 'CIRCLE',
         req.params.id,
         req.body,
         requestContext(req),

@@ -29,13 +29,13 @@ const paginationQuerySchema = z.object({
 });
 
 const listContentQuerySchema = paginationQuerySchema.extend({
-  type: z.enum(['POST', 'MOMENT']).optional(),
+  type: z.enum(['POST', 'MOMENT', 'COMMENT', 'MOMENT_COMMENT', 'CIRCLE']).optional(),
   status: z.enum(['ACTIVE', 'REMOVED']).optional(),
   search: z.string().optional(),
 });
 
 const contentParamsSchema = z.object({
-  type: z.enum(['POST', 'MOMENT']),
+  type: z.enum(['POST', 'MOMENT', 'COMMENT', 'MOMENT_COMMENT', 'CIRCLE']),
   id: z.string().min(1, '缺少内容 ID'),
 });
 

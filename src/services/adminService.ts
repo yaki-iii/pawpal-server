@@ -7,7 +7,7 @@ import { logger } from '../utils/logger';
 type AdminRoleName = 'SUPER_ADMIN' | 'OPS_ADMIN' | 'CONTENT_MODERATOR' | 'SUPPORT' | 'READONLY';
 type AdminStatusName = 'ACTIVE' | 'DISABLED';
 type UserAccountStatusName = 'ACTIVE' | 'SUSPENDED';
-type AdminContentType = 'POST' | 'MOMENT';
+type AdminContentType = 'POST' | 'MOMENT' | 'COMMENT' | 'MOMENT_COMMENT' | 'CIRCLE';
 type AdminContentStatus = 'ACTIVE' | 'REMOVED';
 type ReportStatusName = 'PENDING' | 'REVIEWING' | 'RESOLVED' | 'REJECTED';
 type ReportResolutionActionName = 'NO_ACTION' | 'HIDE_CONTENT' | 'RESTORE_CONTENT' | 'WARN_USER' | 'SUSPEND_USER';
@@ -425,6 +425,17 @@ export class AdminService {
         ? { isRemoved: false }
         : {};
     const search = query.search?.trim();
+
+    if (query.type === 'COMMENT') {
+      return AdminService.listCommentsForModeration(page, pageSize, statusWhere, search);
+    }
+    if (query.type === 'MOMENT_COMMENT') {
+      return AdminService.listMomentCommentsForModeration(page, pageSize, statusWhere, search);
+    }
+    if (query.type === 'CIRCLE') {
+      return AdminService.listCirclesForModeration(page, pageSize, statusWhere, search);
+    }
+
     const windowSize = page * pageSize;
 
     const [postTotal, momentTotal, posts, moments] = await Promise.all([
@@ -487,6 +498,135 @@ export class AdminService {
 
     return {
       items: items.slice(start, start + pageSize),
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  }
+
+  private static async listCommentsForModeration(
+    page: number,
+    pageSize: number,
+    statusWhere: Record<string, unknown>,
+    search?: string,
+  ): Promise<{
+    items: Array<Record<string, unknown>>;
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  }> {
+    const where = {
+      ...statusWhere,
+      ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}),
+    };
+    const [total, comments] = await Promise.all([
+      prisma.comment.count({ where }),
+      prisma.comment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          author: { select: { id: true, email: true, nickname: true, avatar: true } },
+          post: { select: { id: true, title: true } },
+        },
+      }),
+    ]);
+
+    return AdminService.paginatedResult(
+      comments.map((comment) => AdminService.toAdminCommentListItem(comment, 'COMMENT')),
+      page,
+      pageSize,
+      total,
+    );
+  }
+
+  private static async listMomentCommentsForModeration(
+    page: number,
+    pageSize: number,
+    statusWhere: Record<string, unknown>,
+    search?: string,
+  ): Promise<{
+    items: Array<Record<string, unknown>>;
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  }> {
+    const where = {
+      ...statusWhere,
+      ...(search ? { content: { contains: search, mode: 'insensitive' } } : {}),
+    };
+    const [total, comments] = await Promise.all([
+      prisma.momentComment.count({ where }),
+      prisma.momentComment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          author: { select: { id: true, email: true, nickname: true, avatar: true } },
+          moment: { select: { id: true, content: true } },
+        },
+      }),
+    ]);
+
+    return AdminService.paginatedResult(
+      comments.map((comment) => AdminService.toAdminCommentListItem(comment, 'MOMENT_COMMENT')),
+      page,
+      pageSize,
+      total,
+    );
+  }
+
+  private static async listCirclesForModeration(
+    page: number,
+    pageSize: number,
+    statusWhere: Record<string, unknown>,
+    search?: string,
+  ): Promise<{
+    items: Array<Record<string, unknown>>;
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  }> {
+    const where = {
+      ...statusWhere,
+      ...(search ? {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      } : {}),
+    };
+    const [total, circles] = await Promise.all([
+      prisma.circle.count({ where }),
+      prisma.circle.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          owner: { select: { id: true, email: true, nickname: true, avatar: true } },
+        },
+      }),
+    ]);
+
+    return AdminService.paginatedResult(
+      circles.map(AdminService.toAdminCircleListItem),
+      page,
+      pageSize,
+      total,
+    );
+  }
+
+  private static paginatedResult(
+    items: Array<Record<string, unknown>>,
+    page: number,
+    pageSize: number,
+    total: number,
+  ): {
+    items: Array<Record<string, unknown>>;
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  } {
+    return {
+      items,
       meta: {
         page,
         pageSize,
@@ -605,6 +745,21 @@ export class AdminService {
 
     if (report.targetType === 'MOMENT') {
       await AdminService.setContentRemoved(actor, 'MOMENT', report.targetId, input.action === 'HIDE_CONTENT', input.note, context);
+      return;
+    }
+
+    if (report.targetType === 'COMMENT') {
+      await AdminService.setContentRemoved(actor, 'COMMENT', report.targetId, input.action === 'HIDE_CONTENT', input.note, context);
+      return;
+    }
+
+    if (report.targetType === 'MOMENT_COMMENT') {
+      await AdminService.setContentRemoved(actor, 'MOMENT_COMMENT', report.targetId, input.action === 'HIDE_CONTENT', input.note, context);
+      return;
+    }
+
+    if (report.targetType === 'CIRCLE') {
+      await AdminService.setContentRemoved(actor, 'CIRCLE', report.targetId, input.action === 'HIDE_CONTENT', input.note, context);
     }
   }
 
@@ -632,6 +787,60 @@ export class AdminService {
         context,
       });
       return AdminService.toAdminPostListItem(after);
+    }
+
+    if (type === 'COMMENT') {
+      const before = await prisma.comment.findUnique({ where: { id } });
+      if (!before) throw new Error('评论不存在');
+
+      const after = await prisma.comment.update({ where: { id }, data: { isRemoved } });
+      await AdminService.writeAuditLog({
+        adminUserId: actor.id,
+        action: isRemoved ? 'COMMENT_REMOVE' : 'COMMENT_RESTORE',
+        targetType: 'COMMENT',
+        targetId: id,
+        reason,
+        beforeSnapshot: before,
+        afterSnapshot: after,
+        context,
+      });
+      return AdminService.toAdminCommentListItem(after, 'COMMENT');
+    }
+
+    if (type === 'MOMENT_COMMENT') {
+      const before = await prisma.momentComment.findUnique({ where: { id } });
+      if (!before) throw new Error('日常评论不存在');
+
+      const after = await prisma.momentComment.update({ where: { id }, data: { isRemoved } });
+      await AdminService.writeAuditLog({
+        adminUserId: actor.id,
+        action: isRemoved ? 'MOMENT_COMMENT_REMOVE' : 'MOMENT_COMMENT_RESTORE',
+        targetType: 'MOMENT_COMMENT',
+        targetId: id,
+        reason,
+        beforeSnapshot: before,
+        afterSnapshot: after,
+        context,
+      });
+      return AdminService.toAdminCommentListItem(after, 'MOMENT_COMMENT');
+    }
+
+    if (type === 'CIRCLE') {
+      const before = await prisma.circle.findUnique({ where: { id } });
+      if (!before) throw new Error('圈子不存在');
+
+      const after = await prisma.circle.update({ where: { id }, data: { isRemoved } });
+      await AdminService.writeAuditLog({
+        adminUserId: actor.id,
+        action: isRemoved ? 'CIRCLE_REMOVE' : 'CIRCLE_RESTORE',
+        targetType: 'CIRCLE',
+        targetId: id,
+        reason,
+        beforeSnapshot: before,
+        afterSnapshot: after,
+        context,
+      });
+      return AdminService.toAdminCircleListItem(after);
     }
 
     const before = await prisma.moment.findUnique({ where: { id } });
@@ -760,6 +969,49 @@ export class AdminService {
       updatedAt: moment.updatedAt.toISOString(),
       author: moment.user ? AdminService.toAdminAuthor(moment.user) : undefined,
       pet: moment.pet ? AdminService.toAdminPet(moment.pet) : undefined,
+    };
+  }
+
+  private static toAdminCommentListItem(comment: Record<string, any>, type: 'COMMENT' | 'MOMENT_COMMENT'): Record<string, unknown> {
+    const sourceTitle = type === 'COMMENT'
+      ? comment.post?.title
+      : comment.moment?.content;
+    return {
+      id: comment.id,
+      type,
+      title: type === 'COMMENT' ? '帖子评论' : '日常评论',
+      content: comment.content,
+      images: [],
+      videos: [],
+      status: comment.isRemoved ? 'REMOVED' : 'ACTIVE',
+      likeCount: 0,
+      commentCount: 0,
+      createdAt: comment.createdAt.toISOString(),
+      updatedAt: comment.updatedAt ? comment.updatedAt.toISOString() : comment.createdAt.toISOString(),
+      author: comment.author ? AdminService.toAdminAuthor(comment.author) : undefined,
+      circle: sourceTitle
+        ? {
+            id: type === 'COMMENT' ? comment.postId : comment.momentId,
+            name: String(sourceTitle).slice(0, 30),
+          }
+        : undefined,
+    };
+  }
+
+  private static toAdminCircleListItem(circle: Record<string, any>): Record<string, unknown> {
+    return {
+      id: circle.id,
+      type: 'CIRCLE',
+      title: circle.name,
+      content: circle.description || '',
+      images: circle.coverImage ? [circle.coverImage] : [],
+      videos: [],
+      status: circle.isRemoved ? 'REMOVED' : 'ACTIVE',
+      likeCount: circle.memberCount || 0,
+      commentCount: circle.postCount || 0,
+      createdAt: circle.createdAt.toISOString(),
+      updatedAt: circle.updatedAt ? circle.updatedAt.toISOString() : circle.createdAt.toISOString(),
+      author: circle.owner ? AdminService.toAdminAuthor(circle.owner) : undefined,
     };
   }
 

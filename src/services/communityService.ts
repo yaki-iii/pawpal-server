@@ -188,10 +188,11 @@ export class CommunityService {
    */
   static async listComments(postId: string): Promise<CommentDTO[]> {
     const comments = await prisma.comment.findMany({
-      where: { postId, parentId: null },
+      where: { postId, parentId: null, isRemoved: false },
       include: {
         author: true,
         replies: {
+          where: { isRemoved: false },
           include: { author: true },
           orderBy: { createdAt: 'asc' },
         },

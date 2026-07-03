@@ -13,6 +13,8 @@ export async function runStartupMigrations(): Promise<void> {
     await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "shareCount" INTEGER NOT NULL DEFAULT 0');
     await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "visibility" TEXT NOT NULL DEFAULT \'PUBLIC\'');
     await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
+    await prisma.$executeRawUnsafe('ALTER TABLE "comments" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
+    await prisma.$executeRawUnsafe('ALTER TABLE "circles" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
     await prisma.$executeRawUnsafe(`
       DO $$
       BEGIN
@@ -117,6 +119,7 @@ export async function runStartupMigrations(): Promise<void> {
       )
     `);
     await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "moment_comments_momentId_idx" ON "moment_comments"("momentId")');
+    await prisma.$executeRawUnsafe('ALTER TABLE "moment_comments" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
     await addForeignKeyIfMissing(
       'moment_comments_momentId_fkey',
       'ALTER TABLE "moment_comments" ADD CONSTRAINT "moment_comments_momentId_fkey" FOREIGN KEY ("momentId") REFERENCES "moments"("id") ON DELETE CASCADE ON UPDATE CASCADE',

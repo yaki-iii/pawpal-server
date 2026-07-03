@@ -308,6 +308,7 @@ model Comment {
   userId    String
   parentId  String?
   content   String
+  isRemoved Boolean  @default(false)
   createdAt DateTime @default(now())
 
   post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
@@ -349,6 +350,7 @@ model Circle {
   lastActiveAt    DateTime         @default(now())
   memberCount     Int              @default(0)
   postCount       Int              @default(0)
+  isRemoved       Boolean          @default(false)
   createdAt       DateTime         @default(now())
 
   owner          User?           @relation("CircleOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -567,6 +569,7 @@ model MomentComment {
   userId    String
   parentId  String?
   content   String
+  isRemoved Boolean  @default(false)
   createdAt DateTime @default(now())
 
   moment  Moment @relation(fields: [momentId], references: [id], onDelete: Cascade)

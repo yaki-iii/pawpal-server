@@ -41,6 +41,24 @@ jest.mock('../src/config/database', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    comment: {
+      count: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    momentComment: {
+      count: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    circle: {
+      count: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
   },
 }));
 
@@ -451,6 +469,73 @@ describe('AdminService', () => {
       expect(result.items[0].pet).toEqual({ id: 'pet-1', name: '小白', avatar: 'pet.jpg' });
     });
 
+    it('lists comments, moment comments, and circles for moderation', async () => {
+      const createdAt = new Date('2026-07-03T00:00:00Z');
+      (prisma.comment.count as jest.Mock).mockResolvedValue(1);
+      (prisma.comment.findMany as jest.Mock).mockResolvedValue([{
+        id: 'comment-1',
+        postId: 'post-1',
+        userId: 'user-1',
+        content: '评论内容',
+        isRemoved: false,
+        createdAt,
+        author: { id: 'user-1', email: 'u@example.com', nickname: '用户', avatar: '' },
+        post: { id: 'post-1', title: '帖子标题' },
+      }]);
+
+      const comments = await AdminService.listContent({ type: 'COMMENT' });
+
+      expect(comments.items[0]).toEqual(expect.objectContaining({
+        id: 'comment-1',
+        type: 'COMMENT',
+        title: '帖子评论',
+        status: 'ACTIVE',
+      }));
+
+      (prisma.momentComment.count as jest.Mock).mockResolvedValue(1);
+      (prisma.momentComment.findMany as jest.Mock).mockResolvedValue([{
+        id: 'moment-comment-1',
+        momentId: 'moment-1',
+        userId: 'user-2',
+        content: '日常评论',
+        isRemoved: true,
+        createdAt,
+        author: { id: 'user-2', email: 'm@example.com', nickname: '用户2', avatar: '' },
+        moment: { id: 'moment-1', content: '日常正文' },
+      }]);
+
+      const momentComments = await AdminService.listContent({ type: 'MOMENT_COMMENT', status: 'REMOVED' });
+
+      expect(momentComments.items[0]).toEqual(expect.objectContaining({
+        id: 'moment-comment-1',
+        type: 'MOMENT_COMMENT',
+        title: '日常评论',
+        status: 'REMOVED',
+      }));
+
+      (prisma.circle.count as jest.Mock).mockResolvedValue(1);
+      (prisma.circle.findMany as jest.Mock).mockResolvedValue([{
+        id: 'circle-1',
+        name: '猫咪圈',
+        description: '猫咪交流',
+        coverImage: '',
+        isRemoved: false,
+        memberCount: 10,
+        postCount: 2,
+        createdAt,
+        owner: { id: 'owner-1', email: 'owner@example.com', nickname: '圈主', avatar: '' },
+      }]);
+
+      const circles = await AdminService.listContent({ type: 'CIRCLE' });
+
+      expect(circles.items[0]).toEqual(expect.objectContaining({
+        id: 'circle-1',
+        type: 'CIRCLE',
+        title: '猫咪圈',
+        status: 'ACTIVE',
+      }));
+    });
+
     it('removes a post and writes an audit log', async () => {
       const before = {
         id: 'post-1',
@@ -522,6 +607,38 @@ describe('AdminService', () => {
           targetType: 'MOMENT',
           targetId: 'moment-1',
           reason: '复核通过',
+        }),
+      });
+    });
+
+    it('removes a comment and writes an audit log', async () => {
+      const before = {
+        id: 'comment-1',
+        content: '评论内容',
+        isRemoved: false,
+        createdAt: new Date('2026-07-03T00:00:00Z'),
+      };
+      const after = { ...before, isRemoved: true };
+      (prisma.comment.findUnique as jest.Mock).mockResolvedValue(before);
+      (prisma.comment.update as jest.Mock).mockResolvedValue(after);
+      (prisma.adminAuditLog.create as jest.Mock).mockResolvedValue({});
+
+      const result = await AdminService.removeContent(actor, 'COMMENT', 'comment-1', {
+        reason: '违规评论',
+      });
+
+      expect(result.status).toBe('REMOVED');
+      expect(prisma.comment.update).toHaveBeenCalledWith({
+        where: { id: 'comment-1' },
+        data: { isRemoved: true },
+      });
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          adminUserId: 'admin-1',
+          action: 'COMMENT_REMOVE',
+          targetType: 'COMMENT',
+          targetId: 'comment-1',
+          reason: '违规评论',
         }),
       });
     });
