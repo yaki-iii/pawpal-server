@@ -6,11 +6,30 @@ import { AuthService } from './authService';
 import { PetService } from './petService';
 import { MomentService } from './momentService';
 
+const TRENDING_KEYWORDS = [
+  '疫苗',
+  '驱虫',
+  '猫咪呕吐',
+  '狗狗皮肤',
+  'AI 图片咨询',
+  '附近动物医院',
+  '宠物相册',
+  '布偶猫',
+  '新手养猫',
+  '体重记录',
+];
+
 /**
  * SearchService — full-text search across community posts.
  * Uses PostgreSQL ILIKE for MVP (pg_trgm can be added later for better fuzzy matching).
  */
 export class SearchService {
+  static trendingKeywords(limit: number = 8): string[] {
+    const normalizedLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 20) : 8;
+    return [...new Set(TRENDING_KEYWORDS.map((keyword) => keyword.trim()).filter(Boolean))]
+      .slice(0, normalizedLimit);
+  }
+
   /**
    * Search community posts by keyword.
    * Matches against title and content fields.

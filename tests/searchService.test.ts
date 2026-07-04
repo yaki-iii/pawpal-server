@@ -56,6 +56,14 @@ describe('SearchService', () => {
   });
 
   describe('searchAll', () => {
+    it('should return curated trending keywords with stable ordering and limit', () => {
+      const keywords = SearchService.trendingKeywords(4);
+
+      expect(keywords).toEqual(['疫苗', '驱虫', '猫咪呕吐', '狗狗皮肤']);
+      expect(new Set(keywords).size).toBe(keywords.length);
+      expect(keywords.every((keyword) => keyword.trim().length > 0)).toBe(true);
+    });
+
     it('should return grouped global results for posts, circles, users, pets and moments', async () => {
       (prisma.post.findMany as jest.Mock).mockResolvedValue([
         {

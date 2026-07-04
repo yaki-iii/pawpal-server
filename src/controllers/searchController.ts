@@ -3,6 +3,17 @@ import { SearchService } from '../services/searchService';
 import { sendError, sendSuccess } from '../middleware/error';
 
 export class SearchController {
+  static async trendingKeywords(req: Request, res: Response): Promise<void> {
+    try {
+      const rawLimit = Number(req.query.limit || 8);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.floor(rawLimit), 1), 20) : 8;
+      const keywords = SearchService.trendingKeywords(limit);
+      sendSuccess(res, keywords);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '获取推荐搜索失败');
+    }
+  }
+
   static async globalSearch(req: Request, res: Response): Promise<void> {
     try {
       if (!req.userId) {
