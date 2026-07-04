@@ -18,7 +18,11 @@ jest.mock('../src/config/database', () => ({
       create: jest.fn(),
       delete: jest.fn(),
     },
+    reminder: {
+      findMany: jest.fn(),
+    },
     pet: {
+      findUnique: jest.fn(),
       update: jest.fn(),
     },
   },
@@ -46,7 +50,16 @@ jest.mock('../src/services/reminderService', () => ({
   ReminderService: {
     generateFromHealthRecord: jest.fn().mockResolvedValue(null),
     calculateNextDate: jest.fn(),
-    toDTO: jest.fn(),
+    toDTO: jest.fn((reminder) => ({
+      id: reminder.id,
+      petId: reminder.petId,
+      type: reminder.type,
+      nextDate: reminder.nextDate.toISOString(),
+      cycleDays: reminder.cycleDays,
+      status: reminder.status,
+      createdAt: reminder.createdAt.toISOString(),
+      updatedAt: reminder.updatedAt.toISOString(),
+    })),
   },
 }));
 
@@ -69,6 +82,21 @@ const mockWeightRecord = {
   weight: 12.5,
   date: new Date('2026-06-01'),
   createdAt: new Date('2026-06-01'),
+};
+
+const mockPet = {
+  id: 'pet-1',
+  userId: 'user-1',
+  name: '奶盖',
+  species: 'CAT',
+  breed: '布偶',
+  gender: 'FEMALE',
+  birthday: new Date('2024-01-01'),
+  weight: 5.1,
+  photo: '',
+  neutered: true,
+  createdAt: new Date('2024-01-01'),
+  updatedAt: new Date('2026-06-01'),
 };
 
 describe('HealthService', () => {
@@ -107,6 +135,57 @@ describe('HealthService', () => {
       const records = await HealthService.listHealthRecords('pet-1');
       expect(typeof records[0].date).toBe('string');
       expect(records[0].date).toBe('2026-06-01T00:00:00.000Z');
+    });
+  });
+
+  describe('getHealthReport', () => {
+    it('should summarize records, weight trend, and pending reminders for an owned pet', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue(mockPet);
+      (prisma.healthRecord.findMany as jest.Mock).mockResolvedValue([
+        mockHealthRecord,
+        {
+          ...mockHealthRecord,
+          id: 'record-2',
+          type: HealthRecordType.DEWORMING,
+          itemName: '体内驱虫',
+          date: new Date('2026-05-01'),
+          images: [],
+        },
+      ]);
+      (prisma.weightRecord.findMany as jest.Mock).mockResolvedValue([
+        { ...mockWeightRecord, id: 'weight-1', weight: 4.8, date: new Date('2026-05-01') },
+        { ...mockWeightRecord, id: 'weight-2', weight: 5.1, date: new Date('2026-06-01') },
+      ]);
+      (prisma.reminder.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'reminder-1',
+          petId: 'pet-1',
+          type: 'VACCINE',
+          nextDate: new Date('2026-07-01'),
+          cycleDays: 365,
+          status: 'PENDING',
+          createdAt: new Date('2026-06-01'),
+          updatedAt: new Date('2026-06-01'),
+        },
+      ]);
+
+      const report = await HealthService.getHealthReport('pet-1', 'user-1');
+
+      expect(report.pet.id).toBe('pet-1');
+      expect(report.summary.totalHealthRecords).toBe(2);
+      expect(report.summary.latestWeight).toBe(5.1);
+      expect(report.summary.weightChange).toBeCloseTo(0.3);
+      expect(report.summary.pendingReminderCount).toBe(1);
+      expect(report.latestRecords).toHaveLength(2);
+      expect(report.weightTrend).toHaveLength(2);
+      expect(report.upcomingReminders[0].id).toBe('reminder-1');
+      expect(report.insights).toContain('最近体重较上次增加 0.3kg。');
+    });
+
+    it('should reject report access when the pet is not owned by the user', async () => {
+      (prisma.pet.findUnique as jest.Mock).mockResolvedValue({ ...mockPet, userId: 'other-user' });
+
+      await expect(HealthService.getHealthReport('pet-1', 'user-1')).rejects.toThrow('无权访问该宠物');
     });
   });
 

@@ -74,6 +74,21 @@ export interface ReminderDTO {
   updatedAt: string;
 }
 
+export interface PetHealthReportDTO {
+  pet: PetDTO;
+  summary: {
+    totalHealthRecords: number;
+    latestWeight: number | null;
+    weightChange: number | null;
+    pendingReminderCount: number;
+    lastRecordAt: string | null;
+  };
+  latestRecords: HealthRecordDTO[];
+  weightTrend: WeightRecordDTO[];
+  upcomingReminders: ReminderDTO[];
+  insights: string[];
+}
+
 export interface PostDTO {
   id: string;
   userId: string;

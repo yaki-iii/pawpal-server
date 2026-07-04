@@ -1,14 +1,66 @@
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import type { HealthRecord, WeightRecord } from '@prisma/client';
-import type { HealthRecordDTO, WeightRecordDTO } from '../types';
-import { HealthRecordType } from '@prisma/client';
+import type { HealthRecordDTO, PetHealthReportDTO, WeightRecordDTO } from '../types';
+import { HealthRecordType, ReminderStatus } from '@prisma/client';
 import { ReminderService } from './reminderService';
+import { PetService } from './petService';
 
 /**
  * HealthService — health records, weight records, and related business logic.
  */
 export class HealthService {
+  static async getHealthReport(petId: string, userId: string): Promise<PetHealthReportDTO> {
+    const pet = await prisma.pet.findUnique({ where: { id: petId } });
+    if (!pet) {
+      throw new Error('宠物不存在');
+    }
+    if (pet.userId !== userId) {
+      throw new Error('无权访问该宠物');
+    }
+
+    const [healthRecords, weightRecords, reminders] = await Promise.all([
+      prisma.healthRecord.findMany({
+        where: { petId },
+        orderBy: { date: 'desc' },
+      }),
+      prisma.weightRecord.findMany({
+        where: { petId },
+        orderBy: { date: 'asc' },
+        take: 12,
+      }),
+      prisma.reminder.findMany({
+        where: {
+          petId,
+          status: { in: [ReminderStatus.PENDING, ReminderStatus.NOTIFIED, ReminderStatus.OVERDUE] },
+        },
+        orderBy: { nextDate: 'asc' },
+        take: 5,
+      }),
+    ]);
+
+    const latestWeight = weightRecords.length > 0 ? weightRecords[weightRecords.length - 1].weight : null;
+    const previousWeight = weightRecords.length > 1 ? weightRecords[weightRecords.length - 2].weight : null;
+    const weightChange = latestWeight !== null && previousWeight !== null
+      ? Number((latestWeight - previousWeight).toFixed(1))
+      : null;
+
+    return {
+      pet: PetService.toDTO(pet),
+      summary: {
+        totalHealthRecords: healthRecords.length,
+        latestWeight,
+        weightChange,
+        pendingReminderCount: reminders.length,
+        lastRecordAt: healthRecords[0]?.date.toISOString() ?? null,
+      },
+      latestRecords: healthRecords.slice(0, 5).map(HealthService.toHealthRecordDTO),
+      weightTrend: weightRecords.map(HealthService.toWeightRecordDTO),
+      upcomingReminders: reminders.map(ReminderService.toDTO),
+      insights: HealthService.buildHealthInsights(healthRecords, latestWeight, weightChange, reminders.length),
+    };
+  }
+
   /**
    * List health records for a pet, optionally filtered by type.
    */
@@ -174,5 +226,40 @@ export class HealthService {
       date: record.date.toISOString(),
       createdAt: record.createdAt.toISOString(),
     };
+  }
+
+  private static buildHealthInsights(
+    healthRecords: HealthRecord[],
+    latestWeight: number | null,
+    weightChange: number | null,
+    pendingReminderCount: number,
+  ): string[] {
+    const insights: string[] = [];
+
+    if (healthRecords.length === 0) {
+      insights.push('还没有健康记录，可以先补充疫苗、驱虫或体检记录。');
+    } else {
+      insights.push(`最近一次健康记录是 ${healthRecords[0].itemName}。`);
+    }
+
+    if (latestWeight === null) {
+      insights.push('还没有体重记录，建议定期记录体重变化。');
+    } else if (weightChange === null) {
+      insights.push(`当前最近体重为 ${latestWeight}kg。`);
+    } else if (weightChange > 0) {
+      insights.push(`最近体重较上次增加 ${weightChange}kg。`);
+    } else if (weightChange < 0) {
+      insights.push(`最近体重较上次减少 ${Math.abs(weightChange)}kg。`);
+    } else {
+      insights.push('最近两次体重保持稳定。');
+    }
+
+    if (pendingReminderCount > 0) {
+      insights.push(`有 ${pendingReminderCount} 个健康提醒需要关注。`);
+    } else {
+      insights.push('当前没有待处理健康提醒。');
+    }
+
+    return insights;
   }
 }

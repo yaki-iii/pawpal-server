@@ -7,6 +7,22 @@ import { sendSuccess, sendError } from '../middleware/error';
  * HealthController — handles health records, weight records, and reminders.
  */
 export class HealthController {
+  /**
+   * GET /pets/:petId/health-report
+   */
+  static async getHealthReport(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) {
+        sendError(res, 401, '未授权');
+        return;
+      }
+      const report = await HealthService.getHealthReport(req.params.petId, req.userId);
+      sendSuccess(res, report);
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '获取健康报告失败');
+    }
+  }
+
   // ---- Health Records ----
 
   /**

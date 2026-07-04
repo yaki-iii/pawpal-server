@@ -30,6 +30,7 @@ export const petHealthRoutes = Router();
 petHealthRoutes.use(requireAuth);
 
 // Health Records
+petHealthRoutes.get('/:petId/health-report', HealthController.getHealthReport);
 petHealthRoutes.get('/:petId/health-records', HealthController.listHealthRecords);
 petHealthRoutes.post('/:petId/health-records', validateBody(healthRecordSchema), HealthController.createHealthRecord);
 petHealthRoutes.put('/:petId/health-records/:recordId', validateBody(healthRecordSchema.partial()), HealthController.updateHealthRecord);
