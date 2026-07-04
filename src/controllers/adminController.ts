@@ -91,6 +91,34 @@ export class AdminController {
     }
   }
 
+  static async createAdminUser(req: Request, res: Response): Promise<void> {
+    if (!req.admin) {
+      sendError(res, 401, '未授权', undefined, 401);
+      return;
+    }
+
+    try {
+      const admin = await AdminService.createAdminUser(req.admin, req.body, requestContext(req));
+      sendSuccess(res, admin, '管理员已创建');
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '创建管理员失败');
+    }
+  }
+
+  static async updateAdminUser(req: Request, res: Response): Promise<void> {
+    if (!req.admin) {
+      sendError(res, 401, '未授权', undefined, 401);
+      return;
+    }
+
+    try {
+      const admin = await AdminService.updateAdminUser(req.admin, req.params.id, req.body, requestContext(req));
+      sendSuccess(res, admin, '管理员已更新');
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '更新管理员失败');
+    }
+  }
+
   static async listUsers(req: Request, res: Response): Promise<void> {
     try {
       const result = await AdminService.listUsers({

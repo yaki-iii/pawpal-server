@@ -32,6 +32,28 @@ const dashboardQuerySchema = z.object({
   range: z.enum(['today', '7d', '30d']).optional(),
 });
 
+const adminUserIdParamsSchema = z.object({
+  id: z.string().min(1, '缺少管理员 ID'),
+});
+
+const adminRoleSchema = z.enum(['SUPER_ADMIN', 'OPS_ADMIN', 'CONTENT_MODERATOR', 'SUPPORT', 'READONLY']);
+const adminStatusSchema = z.enum(['ACTIVE', 'DISABLED']);
+
+const createAdminUserSchema = z.object({
+  email: z.string().email('邮箱格式不正确'),
+  password: z.string().min(8, '密码至少8位').max(100, '密码最多100位'),
+  name: z.string().max(50, '名称最多50字').optional(),
+  role: adminRoleSchema,
+  status: adminStatusSchema.optional(),
+});
+
+const updateAdminUserSchema = z.object({
+  password: z.string().min(8, '密码至少8位').max(100, '密码最多100位').optional(),
+  name: z.string().max(50, '名称最多50字').optional(),
+  role: adminRoleSchema.optional(),
+  status: adminStatusSchema.optional(),
+});
+
 const auditLogsQuerySchema = paginationQuerySchema.extend({
   action: z.string().optional(),
   targetType: z.string().optional(),
@@ -88,6 +110,21 @@ router.get('/ai/metrics', requireAdmin, AdminController.getAIMetrics);
 router.get('/sos/metrics', requireAdmin, AdminController.getSOSMetrics);
 router.get('/system/status', requireAdmin, AdminController.getSystemStatus);
 router.get('/admin-users', requireAdmin, AdminController.listAdminUsers);
+router.post(
+  '/admin-users',
+  requireAdmin,
+  requireAdminRole(['SUPER_ADMIN']),
+  validateBody(createAdminUserSchema),
+  AdminController.createAdminUser,
+);
+router.patch(
+  '/admin-users/:id',
+  requireAdmin,
+  requireAdminRole(['SUPER_ADMIN']),
+  validateParams(adminUserIdParamsSchema),
+  validateBody(updateAdminUserSchema),
+  AdminController.updateAdminUser,
+);
 
 router.get('/users', requireAdmin, validateQuery(listUsersQuerySchema), AdminController.listUsers);
 router.get('/users/:id', requireAdmin, validateParams(userIdParamsSchema), AdminController.getUserDetail);

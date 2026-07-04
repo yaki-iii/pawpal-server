@@ -402,6 +402,62 @@ describe('AdminService', () => {
     });
   });
 
+  describe('admin user management', () => {
+    it('creates an admin user with hashed password and audit log', async () => {
+      const createdAt = new Date('2026-07-04T04:00:00Z');
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.adminUser.create as jest.Mock).mockImplementation(async ({ data }) => ({
+        id: 'admin-new',
+        email: data.email,
+        passwordHash: data.passwordHash,
+        name: data.name,
+        role: data.role,
+        status: data.status,
+        lastLoginAt: null,
+        createdAt,
+        updatedAt: createdAt,
+      }));
+      (prisma.adminAuditLog.create as jest.Mock).mockResolvedValue({});
+
+      const admin = await AdminService.createAdminUser(activeSuperAdmin, {
+        email: 'ops@example.com',
+        password: 'new-password',
+        name: '运营',
+        role: 'OPS_ADMIN',
+        status: 'ACTIVE',
+      }, { ipAddress: '127.0.0.1', userAgent: 'jest' });
+
+      expect(admin).toMatchObject({ email: 'ops@example.com', role: 'OPS_ADMIN', status: 'ACTIVE' });
+      expect(prisma.adminUser.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: 'ops@example.com',
+          passwordHash: expect.not.stringContaining('new-password'),
+          name: '运营',
+          role: 'OPS_ADMIN',
+          status: 'ACTIVE',
+        }),
+      });
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          adminUserId: 'admin-1',
+          action: 'ADMIN_USER_CREATE',
+          targetType: 'ADMIN_USER',
+          targetId: 'admin-new',
+        }),
+      });
+    });
+
+    it('does not disable the last active super admin', async () => {
+      (prisma.adminUser.findUnique as jest.Mock).mockResolvedValue(activeSuperAdmin);
+      (prisma.adminUser.count as jest.Mock).mockResolvedValue(1);
+
+      await expect(AdminService.updateAdminUser(activeSuperAdmin, 'admin-1', {
+        status: 'DISABLED',
+      })).rejects.toThrow('不能停用最后一个超级管理员');
+      expect(prisma.adminUser.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listUsers', () => {
     it('returns paginated users using search and status filters', async () => {
       const user = {

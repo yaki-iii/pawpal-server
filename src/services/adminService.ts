@@ -48,6 +48,21 @@ interface DashboardSummaryQuery {
   range?: DashboardRange;
 }
 
+interface CreateAdminUserInput {
+  email: string;
+  password: string;
+  name?: string;
+  role: AdminRoleName;
+  status?: AdminStatusName;
+}
+
+interface UpdateAdminUserInput {
+  password?: string;
+  name?: string;
+  role?: AdminRoleName;
+  status?: AdminStatusName;
+}
+
 interface SuspendUserInput {
   reason: string;
   suspendedUntil?: string | null;
@@ -245,6 +260,85 @@ export class AdminService {
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
     });
     return admins.map(AdminService.toDTO);
+  }
+
+  static async createAdminUser(
+    actor: AdminActor,
+    input: CreateAdminUserInput,
+    context: AdminRequestContext = {},
+  ): Promise<AdminDTO> {
+    const existing = await prisma.adminUser.findUnique({ where: { email: input.email } });
+    if (existing) throw new Error('管理员邮箱已存在');
+
+    const passwordHash = await AdminService.hashPassword(input.password);
+    const admin = await prisma.adminUser.create({
+      data: {
+        email: input.email,
+        passwordHash,
+        name: input.name || '',
+        role: input.role,
+        status: input.status || 'ACTIVE',
+      },
+    });
+
+    await AdminService.writeAuditLog({
+      adminUserId: actor.id,
+      action: 'ADMIN_USER_CREATE',
+      targetType: 'ADMIN_USER',
+      targetId: admin.id,
+      reason: `create ${admin.email}`,
+      afterSnapshot: AdminService.toDTO(admin),
+      context,
+    });
+
+    return AdminService.toDTO(admin);
+  }
+
+  static async updateAdminUser(
+    actor: AdminActor,
+    adminUserId: string,
+    input: UpdateAdminUserInput,
+    context: AdminRequestContext = {},
+  ): Promise<AdminDTO> {
+    const before = await prisma.adminUser.findUnique({ where: { id: adminUserId } });
+    if (!before) throw new Error('管理员不存在');
+
+    if (
+      before.role === 'SUPER_ADMIN'
+      && before.status === 'ACTIVE'
+      && (input.status === 'DISABLED' || input.role && input.role !== 'SUPER_ADMIN')
+    ) {
+      const activeSuperAdminCount = await prisma.adminUser.count({
+        where: { role: 'SUPER_ADMIN', status: 'ACTIVE' },
+      });
+      if (activeSuperAdminCount <= 1) {
+        throw new Error('不能停用最后一个超级管理员');
+      }
+    }
+
+    const data: Record<string, unknown> = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.role !== undefined) data.role = input.role;
+    if (input.status !== undefined) data.status = input.status;
+    if (input.password) data.passwordHash = await AdminService.hashPassword(input.password);
+
+    const after = await prisma.adminUser.update({
+      where: { id: adminUserId },
+      data,
+    });
+
+    await AdminService.writeAuditLog({
+      adminUserId: actor.id,
+      action: 'ADMIN_USER_UPDATE',
+      targetType: 'ADMIN_USER',
+      targetId: adminUserId,
+      reason: `update ${after.email}`,
+      beforeSnapshot: AdminService.toDTO(before),
+      afterSnapshot: AdminService.toDTO(after),
+      context,
+    });
+
+    return AdminService.toDTO(after);
   }
 
   static async getDashboardSummary(query: DashboardSummaryQuery = {}): Promise<{

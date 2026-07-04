@@ -20,6 +20,8 @@ jest.mock('../src/services/adminService', () => ({
     getSOSMetrics: jest.fn(),
     getSystemStatus: jest.fn(),
     listAdminUsers: jest.fn(),
+    createAdminUser: jest.fn(),
+    updateAdminUser: jest.fn(),
     listUsers: jest.fn(),
     getUserDetail: jest.fn(),
     suspendUser: jest.fn(),
@@ -274,6 +276,58 @@ describe('admin HTTP layer', () => {
         data: [activeAdmin],
         message: 'success',
       });
+    });
+
+    it('creates an admin user with actor and request context', async () => {
+      (AdminService.createAdminUser as jest.Mock).mockResolvedValue({
+        id: 'admin-new',
+        email: 'ops@example.com',
+        role: 'OPS_ADMIN',
+        status: 'ACTIVE',
+      });
+      const req = {
+        admin: activeAdmin,
+        body: { email: 'ops@example.com', password: 'new-password', name: '运营', role: 'OPS_ADMIN', status: 'ACTIVE' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.createAdminUser(req, res);
+
+      expect(AdminService.createAdminUser).toHaveBeenCalledWith(
+        activeAdmin,
+        { email: 'ops@example.com', password: 'new-password', name: '运营', role: 'OPS_ADMIN', status: 'ACTIVE' },
+        { ipAddress: '127.0.0.1', userAgent: 'jest' },
+      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: '管理员已创建' }));
+    });
+
+    it('updates an admin user with actor and request context', async () => {
+      (AdminService.updateAdminUser as jest.Mock).mockResolvedValue({
+        id: 'admin-2',
+        email: 'ops@example.com',
+        role: 'SUPPORT',
+        status: 'ACTIVE',
+      });
+      const req = {
+        admin: activeAdmin,
+        params: { id: 'admin-2' },
+        body: { role: 'SUPPORT' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.updateAdminUser(req, res);
+
+      expect(AdminService.updateAdminUser).toHaveBeenCalledWith(
+        activeAdmin,
+        'admin-2',
+        { role: 'SUPPORT' },
+        { ipAddress: '127.0.0.1', userAgent: 'jest' },
+      );
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: '管理员已更新' }));
     });
 
     it('passes expanded content types to admin content service', async () => {
