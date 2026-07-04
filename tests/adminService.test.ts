@@ -367,11 +367,20 @@ describe('AdminService', () => {
         .mockResolvedValueOnce(12)
         .mockResolvedValueOnce(3)
         .mockResolvedValueOnce(4)
-        .mockResolvedValueOnce(2);
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(6);
       (prisma.emergencyHelp.count as jest.Mock)
         .mockResolvedValueOnce(5)
         .mockResolvedValueOnce(1)
-        .mockResolvedValueOnce(2);
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(6);
       (prisma.vetClinic.count as jest.Mock).mockResolvedValue(8);
 
       const ai = await AdminService.getAIMetrics();
@@ -383,6 +392,14 @@ describe('AdminService', () => {
         todaySessions: 3,
         imageSessions: 4,
         fallbackSessions: 2,
+        failureSessions: 1,
+        highRiskConsultations: {
+          emergency: 2,
+          medication: 3,
+          diet: 4,
+          behavior: 5,
+          vaccine: 6,
+        },
         deepSeekConfigured: false,
         arkConfigured: false,
       }));
@@ -390,8 +407,16 @@ describe('AdminService', () => {
         totalHelpRequests: 5,
         activeHelpRequests: 1,
         todayHelpRequests: 2,
+        locatedHelpRequests: 3,
+        manualLocationHelpRequests: 4,
+        criticalHelpRequests: 6,
         localVetClinics: 8,
         amapConfigured: false,
+        diagnostics: {
+          amapConfigured: false,
+          localFallbackAvailable: true,
+          locationTracking: 'INFERRED_FROM_HELP_REQUESTS',
+        },
       }));
       expect(system).toEqual(expect.objectContaining({
         buildId: 'pawpal-test-build',

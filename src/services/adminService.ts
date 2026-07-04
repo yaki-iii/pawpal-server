@@ -469,7 +469,18 @@ export class AdminService {
 
   static async getAIMetrics(): Promise<Record<string, unknown>> {
     const today = AdminService.startOfToday();
-    const [totalSessions, todaySessions, imageSessions, fallbackSessions] = await Promise.all([
+    const [
+      totalSessions,
+      todaySessions,
+      imageSessions,
+      fallbackSessions,
+      failureSessions,
+      emergencyConsultations,
+      medicationConsultations,
+      dietConsultations,
+      behaviorConsultations,
+      vaccineConsultations,
+    ] = await Promise.all([
       prisma.aiAssistantSession.count(),
       prisma.aiAssistantSession.count({ where: { createdAt: { gte: today } } }),
       prisma.aiAssistantSession.count({ where: { imageUrls: { isEmpty: false } } }),
@@ -482,6 +493,21 @@ export class AdminService {
           ],
         },
       }),
+      prisma.aiAssistantSession.count({
+        where: {
+          OR: [
+            { summary: { contains: '错误', mode: 'insensitive' } },
+            { summary: { contains: '失败', mode: 'insensitive' } },
+            { summary: { contains: 'timeout', mode: 'insensitive' } },
+            { summary: { contains: 'error', mode: 'insensitive' } },
+          ],
+        },
+      }),
+      AdminService.countAIConsultations(['急症', '紧急', '抽搐', '中毒', '呼吸困难']),
+      AdminService.countAIConsultations(['用药', '药', '剂量', '抗生素']),
+      AdminService.countAIConsultations(['饮食', '喂食', '粮', '呕吐', '腹泻']),
+      AdminService.countAIConsultations(['行为', '焦虑', '攻击', '吠叫', '乱尿']),
+      AdminService.countAIConsultations(['疫苗', '驱虫', '免疫']),
     ]);
 
     return {
@@ -489,6 +515,14 @@ export class AdminService {
       todaySessions,
       imageSessions,
       fallbackSessions,
+      failureSessions,
+      highRiskConsultations: {
+        emergency: emergencyConsultations,
+        medication: medicationConsultations,
+        diet: dietConsultations,
+        behavior: behaviorConsultations,
+        vaccine: vaccineConsultations,
+      },
       deepSeekConfigured: AdminService.hasConfiguredSecret(config.llm.apiKey, ['your-deepseek-api-key-here']),
       arkConfigured: AdminService.hasConfiguredSecret(config.ark.apiKey, ['your-ark-api-key-here']),
       model: config.llm.model,
@@ -498,19 +532,39 @@ export class AdminService {
 
   static async getSOSMetrics(): Promise<Record<string, unknown>> {
     const today = AdminService.startOfToday();
-    const [totalHelpRequests, activeHelpRequests, todayHelpRequests, localVetClinics] = await Promise.all([
+    const [
+      totalHelpRequests,
+      activeHelpRequests,
+      todayHelpRequests,
+      locatedHelpRequests,
+      manualLocationHelpRequests,
+      criticalHelpRequests,
+      localVetClinics,
+    ] = await Promise.all([
       prisma.emergencyHelp.count(),
       prisma.emergencyHelp.count({ where: { status: 'ACTIVE' } }),
       prisma.emergencyHelp.count({ where: { createdAt: { gte: today } } }),
+      prisma.emergencyHelp.count({ where: { lat: { not: null }, lng: { not: null } } }),
+      prisma.emergencyHelp.count({ where: { location: { not: '' }, OR: [{ lat: null }, { lng: null }] } }),
+      prisma.emergencyHelp.count({ where: { urgency: 'CRITICAL' } }),
       prisma.vetClinic.count(),
     ]);
+    const amapConfigured = AdminService.hasConfiguredSecret(config.amap.webServiceKey);
 
     return {
       totalHelpRequests,
       activeHelpRequests,
       todayHelpRequests,
+      locatedHelpRequests,
+      manualLocationHelpRequests,
+      criticalHelpRequests,
       localVetClinics,
-      amapConfigured: AdminService.hasConfiguredSecret(config.amap.webServiceKey),
+      amapConfigured,
+      diagnostics: {
+        amapConfigured,
+        localFallbackAvailable: localVetClinics > 0,
+        locationTracking: 'INFERRED_FROM_HELP_REQUESTS',
+      },
     };
   }
 
@@ -1305,6 +1359,18 @@ export class AdminService {
   private static hasConfiguredSecret(value: string | undefined, placeholders: string[] = []): boolean {
     const normalized = (value || '').trim();
     return normalized.length > 0 && !placeholders.includes(normalized);
+  }
+
+  private static countAIConsultations(keywords: string[]): Promise<number> {
+    return prisma.aiAssistantSession.count({
+      where: {
+        OR: keywords.flatMap((keyword) => [
+          { question: { contains: keyword, mode: 'insensitive' as const } },
+          { questionType: { contains: keyword, mode: 'insensitive' as const } },
+          { summary: { contains: keyword, mode: 'insensitive' as const } },
+        ]),
+      },
+    });
   }
 
   static async writeAuditLog(input: {
