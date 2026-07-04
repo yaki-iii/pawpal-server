@@ -123,6 +123,8 @@ export interface CircleDTO {
   rules: string;
   visibility: string;
   moderatorNote: string;
+  isRecommended?: boolean;
+  operationNote?: string;
   lastActiveAt: string;
   memberCount: number;
   postCount: number;

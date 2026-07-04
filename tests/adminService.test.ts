@@ -77,6 +77,7 @@ jest.mock('../src/config/database', () => ({
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    $executeRawUnsafe: jest.fn(),
   },
 }));
 
@@ -250,6 +251,28 @@ describe('AdminService', () => {
           userAgent: 'jest',
         }),
       ).rejects.toThrow('邮箱或密码错误');
+    });
+  });
+
+  describe('logout', () => {
+    it('writes an audit log for admin logout', async () => {
+      (prisma.adminAuditLog.create as jest.Mock).mockResolvedValue({});
+
+      await AdminService.logout(activeSuperAdmin, {
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      });
+
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          adminUserId: 'admin-1',
+          action: 'ADMIN_LOGOUT',
+          targetType: 'ADMIN_AUTH',
+          targetId: 'admin-1',
+          ipAddress: '127.0.0.1',
+          userAgent: 'jest',
+        }),
+      });
     });
   });
 
@@ -579,6 +602,29 @@ describe('AdminService', () => {
         }),
       }));
     });
+
+    it('filters deleted users and registration date range', async () => {
+      (prisma.user.count as jest.Mock).mockResolvedValue(0);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+
+      await AdminService.listUsers({
+        page: 1,
+        pageSize: 20,
+        accountStatus: 'DELETED',
+        registeredFrom: '2026-07-01T00:00:00.000Z',
+        registeredTo: '2026-07-04T23:59:59.000Z',
+      });
+
+      const where = {
+        deletedAt: { not: null },
+        createdAt: {
+          gte: new Date('2026-07-01T00:00:00.000Z'),
+          lte: new Date('2026-07-04T23:59:59.000Z'),
+        },
+      };
+      expect(prisma.user.count).toHaveBeenCalledWith({ where });
+      expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
+    });
   });
 
   describe('getUserDetail', () => {
@@ -666,6 +712,7 @@ describe('AdminService', () => {
         pageSize: 20,
         action: 'USER_SUSPEND',
         targetType: 'USER',
+        targetId: 'user-1',
         adminUserId: 'admin-1',
         dateFrom: '2026-07-03T00:00:00.000Z',
         dateTo: '2026-07-04T00:00:00.000Z',
@@ -674,6 +721,7 @@ describe('AdminService', () => {
       const where = {
         action: 'USER_SUSPEND',
         targetType: 'USER',
+        targetId: 'user-1',
         adminUserId: 'admin-1',
         createdAt: {
           gte: new Date('2026-07-03T00:00:00.000Z'),
@@ -1079,6 +1127,65 @@ describe('AdminService', () => {
           targetType: 'COMMENT',
           targetId: 'comment-1',
           reason: '违规评论',
+        }),
+      });
+    });
+
+    it('updates circle recommendation and operation note with an audit log', async () => {
+      const before = {
+        id: 'circle-1',
+        name: '新手养猫',
+        description: '养猫交流',
+        coverImage: '',
+        isRemoved: false,
+        isRecommended: false,
+        operationNote: '',
+        memberCount: 12,
+        postCount: 3,
+        createdAt: new Date('2026-07-03T00:00:00Z'),
+        updatedAt: new Date('2026-07-03T00:00:00Z'),
+        owner: { id: 'user-1', email: 'owner@example.com', nickname: '圈主', avatar: '' },
+      };
+      const after = {
+        ...before,
+        isRecommended: true,
+        operationNote: '本周推荐圈子',
+        updatedAt: new Date('2026-07-04T00:00:00Z'),
+      };
+      (prisma.circle.findUnique as jest.Mock).mockResolvedValue(before);
+      (prisma.circle.update as jest.Mock).mockResolvedValue(after);
+      (prisma.adminAuditLog.create as jest.Mock).mockResolvedValue({});
+
+      const result = await AdminService.updateCircleOperations(
+        actor,
+        'circle-1',
+        { isRecommended: true, operationNote: '本周推荐圈子' },
+        { ipAddress: '127.0.0.1', userAgent: 'jest' },
+      );
+
+      expect(result).toEqual(expect.objectContaining({
+        id: 'circle-1',
+        type: 'CIRCLE',
+        isRecommended: true,
+        operationNote: '本周推荐圈子',
+      }));
+      expect(prisma.circle.update).toHaveBeenCalledWith({
+        where: { id: 'circle-1' },
+        data: {
+          isRecommended: true,
+          operationNote: '本周推荐圈子',
+        },
+        include: {
+          owner: { select: { id: true, email: true, nickname: true, avatar: true } },
+        },
+      });
+      expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          adminUserId: 'admin-1',
+          action: 'CIRCLE_OPERATIONS_UPDATE',
+          targetType: 'CIRCLE',
+          targetId: 'circle-1',
+          reason: 'update circle operations',
         }),
       });
     });

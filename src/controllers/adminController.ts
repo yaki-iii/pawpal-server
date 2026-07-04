@@ -35,6 +35,20 @@ export class AdminController {
     sendSuccess(res, req.admin);
   }
 
+  static async logout(req: Request, res: Response): Promise<void> {
+    if (!req.admin) {
+      sendError(res, 401, '未授权', undefined, 401);
+      return;
+    }
+
+    try {
+      await AdminService.logout(req.admin, requestContext(req));
+      sendSuccess(res, null, '已退出登录');
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '退出登录失败', undefined, 500);
+    }
+  }
+
   static async getDashboardSummary(req: Request, res: Response): Promise<void> {
     try {
       const summary = await AdminService.getDashboardSummary({
@@ -125,7 +139,9 @@ export class AdminController {
         page: Number(req.query.page || 1),
         pageSize: Number(req.query.pageSize || 20),
         search: typeof req.query.search === 'string' ? req.query.search : undefined,
-        accountStatus: req.query.accountStatus as 'ACTIVE' | 'SUSPENDED' | undefined,
+        accountStatus: req.query.accountStatus as 'ACTIVE' | 'SUSPENDED' | 'DELETED' | undefined,
+        registeredFrom: typeof req.query.registeredFrom === 'string' ? req.query.registeredFrom : undefined,
+        registeredTo: typeof req.query.registeredTo === 'string' ? req.query.registeredTo : undefined,
       });
       sendSuccess(res, result);
     } catch (error) {
@@ -177,6 +193,7 @@ export class AdminController {
         pageSize: Number(req.query.pageSize || 20),
         action: typeof req.query.action === 'string' ? req.query.action : undefined,
         targetType: typeof req.query.targetType === 'string' ? req.query.targetType : undefined,
+        targetId: typeof req.query.targetId === 'string' ? req.query.targetId : undefined,
         adminUserId: typeof req.query.adminUserId === 'string' ? req.query.adminUserId : undefined,
         dateFrom: typeof req.query.dateFrom === 'string' ? req.query.dateFrom : undefined,
         dateTo: typeof req.query.dateTo === 'string' ? req.query.dateTo : undefined,
@@ -251,6 +268,25 @@ export class AdminController {
       sendSuccess(res, content, '内容已恢复');
     } catch (error) {
       sendError(res, 400, (error as Error).message || '恢复内容失败');
+    }
+  }
+
+  static async updateCircleOperations(req: Request, res: Response): Promise<void> {
+    if (!req.admin) {
+      sendError(res, 401, '未授权', undefined, 401);
+      return;
+    }
+
+    try {
+      const circle = await AdminService.updateCircleOperations(
+        req.admin,
+        req.params.id,
+        req.body,
+        requestContext(req),
+      );
+      sendSuccess(res, circle, '圈子运营信息已更新');
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '更新圈子运营信息失败');
     }
   }
 

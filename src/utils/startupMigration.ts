@@ -15,6 +15,10 @@ export async function runStartupMigrations(): Promise<void> {
     await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
     await prisma.$executeRawUnsafe('ALTER TABLE "comments" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
     await prisma.$executeRawUnsafe('ALTER TABLE "circles" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
+    await prisma.$executeRawUnsafe('ALTER TABLE "circles" ADD COLUMN IF NOT EXISTS "isRecommended" BOOLEAN NOT NULL DEFAULT false');
+    await prisma.$executeRawUnsafe('ALTER TABLE "circles" ADD COLUMN IF NOT EXISTS "operationNote" TEXT NOT NULL DEFAULT \'\'');
+    await prisma.$executeRawUnsafe('ALTER TABLE "circles" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "circles_isRecommended_idx" ON "circles"("isRecommended")');
     await prisma.$executeRawUnsafe(`
       DO $$
       BEGIN

@@ -621,6 +621,8 @@ export class CommunityService {
       rules: (circle as { rules?: string }).rules ?? '',
       visibility: (circle as { visibility?: string }).visibility ?? 'PUBLIC',
       moderatorNote: (circle as { moderatorNote?: string }).moderatorNote ?? '',
+      isRecommended: (circle as { isRecommended?: boolean }).isRecommended ?? false,
+      operationNote: (circle as { operationNote?: string }).operationNote ?? '',
       lastActiveAt: ((circle as { lastActiveAt?: Date }).lastActiveAt ?? circle.createdAt).toISOString(),
       memberCount: circle.memberCount,
       postCount: circle.postCount,

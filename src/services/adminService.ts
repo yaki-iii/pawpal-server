@@ -6,7 +6,7 @@ import { logger } from '../utils/logger';
 
 type AdminRoleName = 'SUPER_ADMIN' | 'OPS_ADMIN' | 'CONTENT_MODERATOR' | 'SUPPORT' | 'READONLY';
 type AdminStatusName = 'ACTIVE' | 'DISABLED';
-type UserAccountStatusName = 'ACTIVE' | 'SUSPENDED';
+type UserAccountStatusName = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
 type AdminContentType = 'POST' | 'MOMENT' | 'COMMENT' | 'MOMENT_COMMENT' | 'CIRCLE';
 type AdminContentStatus = 'ACTIVE' | 'REMOVED';
 type ReportStatusName = 'PENDING' | 'REVIEWING' | 'RESOLVED' | 'REJECTED';
@@ -42,6 +42,8 @@ interface ListUsersQuery {
   pageSize?: number;
   search?: string;
   accountStatus?: UserAccountStatusName;
+  registeredFrom?: string;
+  registeredTo?: string;
 }
 
 interface DashboardSummaryQuery {
@@ -84,6 +86,11 @@ interface ContentModerationInput {
   reason: string;
 }
 
+interface CircleOperationsInput {
+  isRecommended?: boolean;
+  operationNote?: string;
+}
+
 interface ListReportsQuery {
   page?: number;
   pageSize?: number;
@@ -102,6 +109,7 @@ interface ListAuditLogsQuery {
   pageSize?: number;
   action?: string;
   targetType?: string;
+  targetId?: string;
   adminUserId?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -253,6 +261,16 @@ export class AdminService {
       throw new Error('管理员不存在或已停用');
     }
     return AdminService.toDTO(admin);
+  }
+
+  static async logout(actor: AdminActor, context: AdminRequestContext = {}): Promise<void> {
+    await AdminService.writeAuditLog({
+      adminUserId: actor.id,
+      action: 'ADMIN_LOGOUT',
+      targetType: 'ADMIN_AUTH',
+      targetId: actor.id,
+      context,
+    });
   }
 
   static async listAdminUsers(): Promise<AdminDTO[]> {
@@ -613,8 +631,17 @@ export class AdminService {
     const pageSize = Math.min(100, Math.max(1, query.pageSize || 20));
     const where: Record<string, unknown> = {};
 
-    if (query.accountStatus) {
+    if (query.accountStatus === 'DELETED') {
+      where.deletedAt = { not: null };
+    } else if (query.accountStatus) {
       where.accountStatus = query.accountStatus;
+    }
+
+    if (query.registeredFrom || query.registeredTo) {
+      where.createdAt = {
+        ...(query.registeredFrom ? { gte: new Date(query.registeredFrom) } : {}),
+        ...(query.registeredTo ? { lte: new Date(query.registeredTo) } : {}),
+      };
     }
 
     const search = query.search?.trim();
@@ -804,6 +831,7 @@ export class AdminService {
     const where: Record<string, unknown> = {};
     if (query.action?.trim()) where.action = query.action.trim();
     if (query.targetType?.trim()) where.targetType = query.targetType.trim();
+    if (query.targetId?.trim()) where.targetId = query.targetId.trim();
     if (query.adminUserId?.trim()) where.adminUserId = query.adminUserId.trim();
     if (query.dateFrom || query.dateTo) {
       where.createdAt = {
@@ -984,6 +1012,46 @@ export class AdminService {
     });
     if (!circle) throw new Error('圈子不存在');
     return AdminService.toAdminCircleListItem(circle);
+  }
+
+  static async updateCircleOperations(
+    actor: AdminActor,
+    circleId: string,
+    input: CircleOperationsInput,
+    context: AdminRequestContext = {},
+  ): Promise<Record<string, unknown>> {
+    const before = await prisma.circle.findUnique({
+      where: { id: circleId },
+      include: {
+        owner: { select: { id: true, email: true, nickname: true, avatar: true } },
+      },
+    });
+    if (!before) throw new Error('圈子不存在');
+
+    const data: Record<string, unknown> = {};
+    if (input.isRecommended !== undefined) data.isRecommended = input.isRecommended;
+    if (input.operationNote !== undefined) data.operationNote = input.operationNote.trim();
+
+    const after = await prisma.circle.update({
+      where: { id: circleId },
+      data,
+      include: {
+        owner: { select: { id: true, email: true, nickname: true, avatar: true } },
+      },
+    });
+
+    await AdminService.writeAuditLog({
+      adminUserId: actor.id,
+      action: 'CIRCLE_OPERATIONS_UPDATE',
+      targetType: 'CIRCLE',
+      targetId: circleId,
+      reason: 'update circle operations',
+      beforeSnapshot: AdminService.toAdminCircleListItem(before),
+      afterSnapshot: AdminService.toAdminCircleListItem(after),
+      context,
+    });
+
+    return AdminService.toAdminCircleListItem(after);
   }
 
   private static async listCommentsForModeration(
@@ -1540,6 +1608,8 @@ export class AdminService {
       images: circle.coverImage ? [circle.coverImage] : [],
       videos: [],
       status: circle.isRemoved ? 'REMOVED' : 'ACTIVE',
+      isRecommended: Boolean(circle.isRecommended),
+      operationNote: circle.operationNote || '',
       likeCount: circle.memberCount || 0,
       commentCount: circle.postCount || 0,
       createdAt: circle.createdAt.toISOString(),

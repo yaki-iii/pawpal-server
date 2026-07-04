@@ -20,7 +20,9 @@ const listUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().optional(),
-  accountStatus: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
+  accountStatus: z.enum(['ACTIVE', 'SUSPENDED', 'DELETED']).optional(),
+  registeredFrom: z.string().datetime().optional(),
+  registeredTo: z.string().datetime().optional(),
 });
 
 const paginationQuerySchema = z.object({
@@ -57,6 +59,7 @@ const updateAdminUserSchema = z.object({
 const auditLogsQuerySchema = paginationQuerySchema.extend({
   action: z.string().optional(),
   targetType: z.string().optional(),
+  targetId: z.string().optional(),
   adminUserId: z.string().optional(),
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
@@ -75,6 +78,13 @@ const contentParamsSchema = z.object({
 
 const contentModerationSchema = z.object({
   reason: z.string().min(1, '请输入处理原因').max(200, '处理原因最多200字'),
+});
+
+const circleOperationsSchema = z.object({
+  isRecommended: z.boolean().optional(),
+  operationNote: z.string().max(500, '运营备注最多500字').optional(),
+}).refine((value) => value.isRecommended !== undefined || value.operationNote !== undefined, {
+  message: '至少需要更新一个圈子运营字段',
 });
 
 const listReportsQuerySchema = paginationQuerySchema.extend({
@@ -103,6 +113,7 @@ const unsuspendUserSchema = z.object({
 
 router.post('/auth/login', authRateLimiter, validateBody(loginSchema), AdminController.login);
 router.get('/auth/me', requireAdmin, AdminController.getMe);
+router.post('/auth/logout', requireAdmin, AdminController.logout);
 
 router.get('/dashboard/summary', requireAdmin, validateQuery(dashboardQuerySchema), AdminController.getDashboardSummary);
 router.get('/dashboard/alerts', requireAdmin, AdminController.getDashboardAlerts);
@@ -167,6 +178,14 @@ router.post(
   validateParams(contentParamsSchema),
   validateBody(contentModerationSchema),
   AdminController.restoreContent,
+);
+router.patch(
+  '/circles/:id/operations',
+  requireAdmin,
+  requireAdminRole(['OPS_ADMIN', 'CONTENT_MODERATOR']),
+  validateParams(userIdParamsSchema),
+  validateBody(circleOperationsSchema),
+  AdminController.updateCircleOperations,
 );
 
 router.get('/reports', requireAdmin, validateQuery(listReportsQuerySchema), AdminController.listReports);

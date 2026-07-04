@@ -22,6 +22,7 @@ jest.mock('../src/services/adminService', () => ({
     listAdminUsers: jest.fn(),
     createAdminUser: jest.fn(),
     updateAdminUser: jest.fn(),
+    logout: jest.fn(),
     listUsers: jest.fn(),
     getUserDetail: jest.fn(),
     suspendUser: jest.fn(),
@@ -31,6 +32,7 @@ jest.mock('../src/services/adminService', () => ({
     getContentDetail: jest.fn(),
     removeContent: jest.fn(),
     restoreContent: jest.fn(),
+    updateCircleOperations: jest.fn(),
     listReports: jest.fn(),
     getReportDetail: jest.fn(),
     handleReport: jest.fn(),
@@ -169,6 +171,39 @@ describe('admin HTTP layer', () => {
         data: { admin: activeAdmin, token: 'admin-token' },
         message: '登录成功',
       });
+    });
+
+    it('logs out an admin and records request context', async () => {
+      (AdminService.logout as jest.Mock).mockResolvedValue(undefined);
+      const req = {
+        admin: activeAdmin,
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.logout(req, res);
+
+      expect(AdminService.logout).toHaveBeenCalledWith(activeAdmin, {
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 0,
+        data: null,
+        message: '已退出登录',
+      });
+    });
+
+    it('rejects admin logout when admin auth is missing', async () => {
+      const req = {} as Request;
+      const res = mockResponse();
+
+      await AdminController.logout(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      expect(AdminService.logout).not.toHaveBeenCalled();
     });
 
     it('rejects user suspension when admin auth is missing', async () => {
@@ -330,6 +365,36 @@ describe('admin HTTP layer', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: '管理员已更新' }));
     });
 
+    it('passes deleted-user and registration-date filters to admin user service', async () => {
+      (AdminService.listUsers as jest.Mock).mockResolvedValue({
+        items: [],
+        meta: { page: 2, pageSize: 10, total: 0, totalPages: 0 },
+      });
+      const req = {
+        query: {
+          page: '2',
+          pageSize: '10',
+          search: 'user@example.com',
+          accountStatus: 'DELETED',
+          registeredFrom: '2026-07-01T00:00:00.000Z',
+          registeredTo: '2026-07-04T23:59:59.000Z',
+        },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.listUsers(req, res);
+
+      expect(AdminService.listUsers).toHaveBeenCalledWith({
+        page: 2,
+        pageSize: 10,
+        search: 'user@example.com',
+        accountStatus: 'DELETED',
+        registeredFrom: '2026-07-01T00:00:00.000Z',
+        registeredTo: '2026-07-04T23:59:59.000Z',
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
     it('passes expanded content types to admin content service', async () => {
       (AdminService.listContent as jest.Mock).mockResolvedValue({
         items: [{ id: 'comment-1', type: 'COMMENT', status: 'ACTIVE' }],
@@ -437,6 +502,43 @@ describe('admin HTTP layer', () => {
       }));
     });
 
+    it('updates circle operation fields with admin actor and request context', async () => {
+      (AdminService.updateCircleOperations as jest.Mock).mockResolvedValue({
+        id: 'circle-1',
+        type: 'CIRCLE',
+        isRecommended: true,
+        operationNote: '本周推荐圈子',
+      });
+      const req = {
+        admin: activeAdmin,
+        params: { id: 'circle-1' },
+        body: { isRecommended: true, operationNote: '本周推荐圈子' },
+        ip: '127.0.0.1',
+        headers: { 'user-agent': 'jest' },
+      } as unknown as Request;
+      const res = mockResponse();
+
+      await AdminController.updateCircleOperations(req, res);
+
+      expect(AdminService.updateCircleOperations).toHaveBeenCalledWith(
+        activeAdmin,
+        'circle-1',
+        { isRecommended: true, operationNote: '本周推荐圈子' },
+        { ipAddress: '127.0.0.1', userAgent: 'jest' },
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 0,
+        data: {
+          id: 'circle-1',
+          type: 'CIRCLE',
+          isRecommended: true,
+          operationNote: '本周推荐圈子',
+        },
+        message: '圈子运营信息已更新',
+      });
+    });
+
     it('returns a report detail', async () => {
       (AdminService.getReportDetail as jest.Mock).mockResolvedValue({
         id: 'report-1',
@@ -474,6 +576,7 @@ describe('admin HTTP layer', () => {
           pageSize: '20',
           action: 'USER_SUSPEND',
           targetType: 'USER',
+          targetId: 'user-1',
           adminUserId: 'admin-1',
           dateFrom: '2026-07-03T00:00:00.000Z',
           dateTo: '2026-07-04T00:00:00.000Z',
@@ -488,6 +591,7 @@ describe('admin HTTP layer', () => {
         pageSize: 20,
         action: 'USER_SUSPEND',
         targetType: 'USER',
+        targetId: 'user-1',
         adminUserId: 'admin-1',
         dateFrom: '2026-07-03T00:00:00.000Z',
         dateTo: '2026-07-04T00:00:00.000Z',

@@ -615,6 +615,8 @@ export class CircleModerationService {
     rules: string;
     visibility: string;
     moderatorNote: string;
+    isRecommended?: boolean;
+    operationNote?: string;
     lastActiveAt: Date;
     memberCount: number;
     postCount: number;
@@ -633,6 +635,8 @@ export class CircleModerationService {
       rules: circle.rules,
       visibility: circle.visibility,
       moderatorNote: circle.moderatorNote,
+      isRecommended: circle.isRecommended ?? false,
+      operationNote: circle.operationNote ?? '',
       lastActiveAt: circle.lastActiveAt.toISOString(),
       memberCount: circle.memberCount,
       postCount: circle.postCount,
