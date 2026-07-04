@@ -67,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.6 admin users manage build id', async () => {
+  it('exposes the current v0.6 search hot ranking build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v06-admin-users-manage-20260704');
+    expect(BUILD_ID).toBe('pawpal-v06-search-hot-ranking-20260704');
   });
 });

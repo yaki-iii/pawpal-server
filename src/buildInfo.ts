@@ -1,1 +1,1 @@
-export const BUILD_ID = 'pawpal-v06-admin-users-manage-20260704';
+export const BUILD_ID = 'pawpal-v06-search-hot-ranking-20260704';
