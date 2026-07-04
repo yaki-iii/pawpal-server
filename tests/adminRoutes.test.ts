@@ -15,6 +15,7 @@ jest.mock('../src/services/adminService', () => ({
     login: jest.fn(),
     getAdminById: jest.fn(),
     getDashboardSummary: jest.fn(),
+    getDashboardAlerts: jest.fn(),
     getAIMetrics: jest.fn(),
     getSOSMetrics: jest.fn(),
     getSystemStatus: jest.fn(),
@@ -237,6 +238,26 @@ describe('admin HTTP layer', () => {
 
       expect(AdminService.getDashboardSummary).toHaveBeenCalledWith({ range: '30d' });
       expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('returns dashboard alerts', async () => {
+      (AdminService.getDashboardAlerts as jest.Mock).mockResolvedValue([
+        { type: 'REPORTS_PENDING', severity: 'warning', title: '待处理举报', message: '有 2 条待处理举报', count: 2 },
+      ]);
+      const req = {} as Request;
+      const res = mockResponse();
+
+      await AdminController.getDashboardAlerts(req, res);
+
+      expect(AdminService.getDashboardAlerts).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        code: 0,
+        data: [
+          { type: 'REPORTS_PENDING', severity: 'warning', title: '待处理举报', message: '有 2 条待处理举报', count: 2 },
+        ],
+        message: 'success',
+      });
     });
 
     it('returns admin user list data', async () => {

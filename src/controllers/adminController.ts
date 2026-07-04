@@ -46,6 +46,15 @@ export class AdminController {
     }
   }
 
+  static async getDashboardAlerts(_req: Request, res: Response): Promise<void> {
+    try {
+      const alerts = await AdminService.getDashboardAlerts();
+      sendSuccess(res, alerts);
+    } catch (error) {
+      sendError(res, 500, (error as Error).message || '获取后台异常提醒失败', undefined, 500);
+    }
+  }
+
   static async getAIMetrics(_req: Request, res: Response): Promise<void> {
     try {
       const metrics = await AdminService.getAIMetrics();

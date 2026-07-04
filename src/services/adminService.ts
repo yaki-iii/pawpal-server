@@ -302,6 +302,77 @@ export class AdminService {
     };
   }
 
+  static async getDashboardAlerts(): Promise<Array<{
+    type: string;
+    severity: 'info' | 'warning' | 'critical';
+    title: string;
+    message: string;
+    count?: number;
+  }>> {
+    const [pendingReports, aiFallbacks, localVetClinics] = await Promise.all([
+      prisma.contentReport.count({ where: { status: 'PENDING' } }),
+      prisma.aiAssistantSession.count({
+        where: {
+          OR: [
+            { summary: { contains: 'fallback', mode: 'insensitive' } },
+            { summary: { contains: '暂时无法', mode: 'insensitive' } },
+            { summary: { contains: '无法识别图片', mode: 'insensitive' } },
+          ],
+        },
+      }),
+      prisma.vetClinic.count(),
+    ]);
+
+    const alerts: Array<{
+      type: string;
+      severity: 'info' | 'warning' | 'critical';
+      title: string;
+      message: string;
+      count?: number;
+    }> = [];
+
+    if (pendingReports > 0) {
+      alerts.push({
+        type: 'REPORTS_PENDING',
+        severity: 'warning',
+        title: '待处理举报',
+        message: `有 ${pendingReports} 条举报等待处理`,
+        count: pendingReports,
+      });
+    }
+
+    if (aiFallbacks > 0) {
+      alerts.push({
+        type: 'AI_IMAGE_FALLBACK',
+        severity: 'warning',
+        title: 'AI 图片识别 fallback',
+        message: `发现 ${aiFallbacks} 条 AI 图片识别 fallback 记录`,
+        count: aiFallbacks,
+      });
+    }
+
+    if (!AdminService.hasConfiguredSecret(config.amap.webServiceKey)) {
+      alerts.push({
+        type: 'SOS_AMAP_NOT_CONFIGURED',
+        severity: 'critical',
+        title: '高德服务未配置',
+        message: '附近动物医院搜索可能无法返回真实数据',
+      });
+    }
+
+    if (localVetClinics === 0) {
+      alerts.push({
+        type: 'SOS_LOCAL_VETS_EMPTY',
+        severity: 'warning',
+        title: '本地动物医院兜底为空',
+        message: '高德失败时没有本地动物医院数据可兜底',
+        count: 0,
+      });
+    }
+
+    return alerts;
+  }
+
   static async getAIMetrics(): Promise<Record<string, unknown>> {
     const today = AdminService.startOfToday();
     const [totalSessions, todaySessions, imageSessions, fallbackSessions] = await Promise.all([

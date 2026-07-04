@@ -292,6 +292,24 @@ describe('AdminService', () => {
     });
   });
 
+  describe('getDashboardAlerts', () => {
+    it('returns actionable dashboard alerts for reports and configuration gaps', async () => {
+      (prisma.contentReport.count as jest.Mock).mockResolvedValueOnce(4);
+      (prisma.aiAssistantSession.count as jest.Mock).mockResolvedValueOnce(2);
+      (prisma.vetClinic.count as jest.Mock).mockResolvedValueOnce(0);
+
+      const alerts = await AdminService.getDashboardAlerts();
+
+      expect(prisma.contentReport.count).toHaveBeenCalledWith({ where: { status: 'PENDING' } });
+      expect(alerts).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'REPORTS_PENDING', severity: 'warning', count: 4 }),
+        expect.objectContaining({ type: 'AI_IMAGE_FALLBACK', severity: 'warning', count: 2 }),
+        expect.objectContaining({ type: 'SOS_AMAP_NOT_CONFIGURED', severity: 'critical' }),
+        expect.objectContaining({ type: 'SOS_LOCAL_VETS_EMPTY', severity: 'warning', count: 0 }),
+      ]));
+    });
+  });
+
   describe('admin monitoring', () => {
     it('lists admin users without password hashes', async () => {
       (prisma.adminUser.findMany as jest.Mock).mockResolvedValue([
