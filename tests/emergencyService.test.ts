@@ -10,6 +10,9 @@ jest.mock('../src/config/database', () => ({
       findMany: jest.fn(),
       update: jest.fn(),
     },
+    sosSearchLog: {
+      create: jest.fn(),
+    },
     vetClinic: {
       findMany: jest.fn(),
     },
@@ -367,6 +370,15 @@ describe('EmergencyHelpService', () => {
         }),
       );
       expect(prisma.vetClinic.findMany).not.toHaveBeenCalled();
+      expect(prisma.sosSearchLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          lat: 31.2304,
+          lng: 121.4737,
+          source: 'SYSTEM_LOCATION',
+          resultStatus: 'AMAP_SUCCESS',
+          resultCount: 1,
+        }),
+      });
     });
 
     it('should mark AMap vets as 24h from business hours', async () => {
@@ -420,6 +432,35 @@ describe('EmergencyHelpService', () => {
 
       expect(result[0].id).toBe('vet-local');
       expect(prisma.vetClinic.findMany).toHaveBeenCalled();
+      expect(prisma.sosSearchLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          source: 'SYSTEM_LOCATION',
+          resultStatus: 'AMAP_FAILED_DB_FALLBACK',
+          resultCount: 1,
+          errorMessage: 'amap unavailable',
+        }),
+      });
+    });
+
+    it('should record manual vet searches separately for monitoring', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          pois: [],
+        }),
+      });
+      (prisma.vetClinic.findMany as jest.Mock).mockResolvedValue([]);
+
+      await EmergencyHelpService.listNearbyVets(22.9326, 113.2172, 5, { source: 'MANUAL_LOCATION' });
+
+      expect(prisma.sosSearchLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          source: 'MANUAL_LOCATION',
+          resultStatus: 'NO_RESULTS',
+          resultCount: 0,
+        }),
+      });
     });
 
     it('should return vets sorted by distance', async () => {

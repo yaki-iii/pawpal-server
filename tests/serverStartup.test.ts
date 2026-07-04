@@ -67,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.6 monitoring diagnostics build id', async () => {
+  it('exposes the current v0.6 SOS search logs build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v06-monitoring-diagnostics-20260704');
+    expect(BUILD_ID).toBe('pawpal-v06-sos-search-logs-20260704');
   });
 });

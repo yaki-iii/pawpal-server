@@ -57,6 +57,9 @@ interface AMapRegeocodeResponse {
   };
 }
 
+type SOSSearchSource = 'SYSTEM_LOCATION' | 'MANUAL_LOCATION';
+type SOSSearchResultStatus = 'AMAP_SUCCESS' | 'AMAP_NO_RESULTS' | 'AMAP_FAILED_DB_FALLBACK' | 'DB_FALLBACK' | 'NO_RESULTS';
+
 /**
  * EmergencyHelpService — emergency help requests for pet owners.
  *
@@ -195,13 +198,36 @@ export class EmergencyHelpService {
     lat: number,
     lng: number,
     limit: number = 10,
+    options: { userId?: string; source?: SOSSearchSource } = {},
   ): Promise<VetClinicDTO[]> {
-    const amapVets = await EmergencyHelpService.listNearbyVetsFromAMap(lat, lng, limit);
-    if (amapVets.length > 0) {
-      return amapVets;
+    const source = options.source || 'SYSTEM_LOCATION';
+    const amapResult = await EmergencyHelpService.listNearbyVetsFromAMap(lat, lng, limit);
+    if (amapResult.vets.length > 0) {
+      await EmergencyHelpService.recordSOSSearch({
+        userId: options.userId,
+        source,
+        lat,
+        lng,
+        resultStatus: 'AMAP_SUCCESS',
+        resultCount: amapResult.vets.length,
+      });
+      return amapResult.vets;
     }
 
-    return EmergencyHelpService.listNearbyVetsFromDB(lat, lng, limit);
+    const dbVets = await EmergencyHelpService.listNearbyVetsFromDB(lat, lng, limit);
+    const status: SOSSearchResultStatus = dbVets.length > 0
+      ? (amapResult.errorMessage ? 'AMAP_FAILED_DB_FALLBACK' : 'DB_FALLBACK')
+      : (amapResult.errorMessage ? 'AMAP_FAILED_DB_FALLBACK' : 'NO_RESULTS');
+    await EmergencyHelpService.recordSOSSearch({
+      userId: options.userId,
+      source,
+      lat,
+      lng,
+      resultStatus: status,
+      resultCount: dbVets.length,
+      errorMessage: amapResult.errorMessage,
+    });
+    return dbVets;
   }
 
   static async geocodeManualLocation(city: string, address: string): Promise<ManualLocationDTO> {
@@ -309,9 +335,9 @@ export class EmergencyHelpService {
     lat: number,
     lng: number,
     limit: number,
-  ): Promise<VetClinicDTO[]> {
+  ): Promise<{ vets: VetClinicDTO[]; errorMessage?: string }> {
     if (!config.amap.webServiceKey) {
-      return [];
+      return { vets: [], errorMessage: 'AMap key not configured' };
     }
 
     try {
@@ -329,22 +355,23 @@ export class EmergencyHelpService {
       const response = await fetch(`${config.amap.placeAroundUrl}?${params.toString()}`);
       if (!response.ok) {
         logger.warn(`AMap vet search failed: HTTP ${response.status}`);
-        return [];
+        return { vets: [], errorMessage: `HTTP ${response.status}` };
       }
 
       const data = (await response.json()) as AMapAroundResponse;
       if (data.status !== '1') {
         logger.warn(`AMap vet search failed: ${data.info || 'unknown error'}`);
-        return [];
+        return { vets: [], errorMessage: data.info || 'AMap status not ok' };
       }
 
-      return (data.pois || [])
+      const vets = (data.pois || [])
         .map((poi) => EmergencyHelpService.toAMapVetDTO(poi))
         .filter((vet): vet is VetClinicDTO => vet !== null)
         .slice(0, limit);
+      return { vets };
     } catch (error) {
       logger.warn(`AMap vet search unavailable: ${(error as Error).message}`);
-      return [];
+      return { vets: [], errorMessage: (error as Error).message };
     }
   }
 
@@ -432,6 +459,32 @@ export class EmergencyHelpService {
       CRITICAL: '危急',
     };
     return map[urgency] || urgency;
+  }
+
+  private static async recordSOSSearch(input: {
+    userId?: string;
+    source: SOSSearchSource;
+    lat: number;
+    lng: number;
+    resultStatus: SOSSearchResultStatus;
+    resultCount: number;
+    errorMessage?: string;
+  }): Promise<void> {
+    try {
+      await prisma.sosSearchLog.create({
+        data: {
+          userId: input.userId || null,
+          source: input.source,
+          lat: input.lat,
+          lng: input.lng,
+          resultStatus: input.resultStatus,
+          resultCount: input.resultCount,
+          errorMessage: input.errorMessage || '',
+        },
+      });
+    } catch (error) {
+      logger.warn(`SOS search log write failed: ${(error as Error).message}`);
+    }
   }
 
   // ---- DTO Converters ----

@@ -46,13 +46,20 @@ export class EmergencyController {
       const lat = parseFloat(req.query.lat as string);
       const lng = parseFloat(req.query.lng as string);
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+      const source = String(req.query.source || '').toUpperCase() === 'MANUAL'
+        || String(req.query.source || '').toUpperCase() === 'MANUAL_LOCATION'
+        ? 'MANUAL_LOCATION'
+        : 'SYSTEM_LOCATION';
 
       if (isNaN(lat) || isNaN(lng)) {
         sendError(res, 400, '请提供有效的 lat 和 lng 参数');
         return;
       }
 
-      const vets = await EmergencyHelpService.listNearbyVets(lat, lng, limit);
+      const vets = await EmergencyHelpService.listNearbyVets(lat, lng, limit, {
+        userId: req.userId,
+        source,
+      });
       sendSuccess(res, vets);
     } catch (error) {
       sendError(res, 500, (error as Error).message);

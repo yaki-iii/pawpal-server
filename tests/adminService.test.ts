@@ -27,6 +27,9 @@ jest.mock('../src/config/database', () => ({
     emergencyHelp: {
       count: jest.fn(),
     },
+    sosSearchLog: {
+      count: jest.fn(),
+    },
     vetClinic: {
       count: jest.fn(),
     },
@@ -378,9 +381,15 @@ describe('AdminService', () => {
         .mockResolvedValueOnce(5)
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(3)
-        .mockResolvedValueOnce(4)
         .mockResolvedValueOnce(6);
+      (prisma.sosSearchLog.count as jest.Mock)
+        .mockResolvedValueOnce(7)
+        .mockResolvedValueOnce(8)
+        .mockResolvedValueOnce(9)
+        .mockResolvedValueOnce(10)
+        .mockResolvedValueOnce(11)
+        .mockResolvedValueOnce(12)
+        .mockResolvedValueOnce(13);
       (prisma.vetClinic.count as jest.Mock).mockResolvedValue(8);
 
       const ai = await AdminService.getAIMetrics();
@@ -407,15 +416,20 @@ describe('AdminService', () => {
         totalHelpRequests: 5,
         activeHelpRequests: 1,
         todayHelpRequests: 2,
-        locatedHelpRequests: 3,
-        manualLocationHelpRequests: 4,
+        totalVetSearches: 7,
+        systemLocationSearches: 8,
+        manualLocationSearches: 9,
+        amapSuccessSearches: 10,
+        noResultSearches: 11,
+        amapFailedFallbackSearches: 12,
+        dbFallbackSearches: 13,
         criticalHelpRequests: 6,
         localVetClinics: 8,
         amapConfigured: false,
         diagnostics: {
           amapConfigured: false,
           localFallbackAvailable: true,
-          locationTracking: 'INFERRED_FROM_HELP_REQUESTS',
+          locationTracking: 'SOS_SEARCH_LOGS',
         },
       }));
       expect(system).toEqual(expect.objectContaining({
