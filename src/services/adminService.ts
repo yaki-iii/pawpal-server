@@ -434,7 +434,58 @@ export class AdminService {
       throw new Error('用户不存在');
     }
 
-    return AdminService.toAdminUserListItem(user);
+    const [pets, moments, posts, comments, momentComments] = await Promise.all([
+      prisma.pet.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { id: true, name: true, species: true, breed: true, photo: true, createdAt: true },
+      }),
+      prisma.moment.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          pet: { select: { id: true, name: true, photo: true } },
+        },
+      }),
+      prisma.post.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          pet: { select: { id: true, name: true, photo: true } },
+          circle: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.comment.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          post: { select: { id: true, title: true } },
+        },
+      }),
+      prisma.momentComment.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          moment: { select: { id: true, content: true } },
+        },
+      }),
+    ]);
+
+    return {
+      ...AdminService.toAdminUserListItem(user),
+      recent: {
+        pets: pets.map(AdminService.toAdminPetSummary),
+        moments: moments.map(AdminService.toAdminMomentListItem),
+        posts: posts.map(AdminService.toAdminPostListItem),
+        comments: comments.map((comment) => AdminService.toAdminCommentListItem(comment, 'COMMENT')),
+        momentComments: momentComments.map((comment) => AdminService.toAdminCommentListItem(comment, 'MOMENT_COMMENT')),
+      },
+    };
   }
 
   static async suspendUser(
@@ -1281,6 +1332,18 @@ export class AdminService {
       id: pet.id,
       name: pet.name,
       avatar: pet.photo || '',
+    };
+  }
+
+  private static toAdminPetSummary(pet: Record<string, any>): Record<string, unknown> {
+    return {
+      id: pet.id,
+      type: 'PET',
+      name: pet.name,
+      species: pet.species,
+      breed: pet.breed || '',
+      avatar: pet.photo || '',
+      createdAt: pet.createdAt.toISOString(),
     };
   }
 }

@@ -67,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current v0.6 dashboard range build id', async () => {
+  it('exposes the current v0.6 user recent build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v06-dashboard-range-20260704');
+    expect(BUILD_ID).toBe('pawpal-v06-user-recent-20260704');
   });
 });

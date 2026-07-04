@@ -38,6 +38,7 @@ jest.mock('../src/config/database', () => ({
     },
     pet: {
       count: jest.fn(),
+      findMany: jest.fn(),
     },
     moment: {
       count: jest.fn(),
@@ -435,6 +436,70 @@ describe('AdminService', () => {
           OR: expect.any(Array),
         }),
       }));
+    });
+  });
+
+  describe('getUserDetail', () => {
+    it('includes pets and recent user content summaries', async () => {
+      const createdAt = new Date('2026-07-03T08:00:00Z');
+      const updatedAt = new Date('2026-07-03T09:00:00Z');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'user-1',
+        email: 'user@example.com',
+        nickname: '猫猫家长',
+        avatar: '',
+        city: '佛山',
+        membershipLevel: 'FREE',
+        accountStatus: 'ACTIVE',
+        suspendedUntil: null,
+        suspendedReason: '',
+        deletedAt: null,
+        createdAt,
+        updatedAt,
+        _count: { pets: 1, moments: 1, posts: 1, comments: 1, followers: 2, followings: 3 },
+      });
+      (prisma.pet.findMany as jest.Mock).mockResolvedValue([
+        { id: 'pet-1', name: '团团', species: 'CAT', breed: '狸花猫', photo: '', createdAt },
+      ]);
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([
+        { id: 'moment-1', content: '晒猫', images: [], videos: [], isRemoved: false, likeCount: 3, commentCount: 1, createdAt, updatedAt, pet: { id: 'pet-1', name: '团团', photo: '' } },
+      ]);
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([
+        { id: 'post-1', title: '领养故事', content: '今天带猫去公园。', images: [], isRemoved: false, likeCount: 8, commentCount: 2, createdAt, updatedAt, pet: null, circle: { id: 'circle-1', name: '新手养猫' } },
+      ]);
+      (prisma.comment.findMany as jest.Mock).mockResolvedValue([
+        { id: 'comment-1', content: '很有帮助', isRemoved: false, createdAt, postId: 'post-1', post: { id: 'post-1', title: '领养故事' } },
+      ]);
+      (prisma.momentComment.findMany as jest.Mock).mockResolvedValue([
+        { id: 'moment-comment-1', content: '好可爱', isRemoved: false, createdAt, momentId: 'moment-1', moment: { id: 'moment-1', content: '晒猫' } },
+      ]);
+
+      const detail = await AdminService.getUserDetail('user-1');
+
+      expect(prisma.pet.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { id: true, name: true, species: true, breed: true, photo: true, createdAt: true },
+      });
+      expect(prisma.moment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { userId: 'user-1' },
+        take: 5,
+      }));
+      expect(prisma.post.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { userId: 'user-1' },
+        take: 5,
+      }));
+      expect(detail).toMatchObject({
+        id: 'user-1',
+        recent: {
+          pets: [{ id: 'pet-1', name: '团团', type: 'PET' }],
+          moments: [{ id: 'moment-1', type: 'MOMENT', content: '晒猫' }],
+          posts: [{ id: 'post-1', type: 'POST', title: '领养故事' }],
+          comments: [{ id: 'comment-1', type: 'COMMENT', content: '很有帮助' }],
+          momentComments: [{ id: 'moment-comment-1', type: 'MOMENT_COMMENT', content: '好可爱' }],
+        },
+      });
     });
   });
 
