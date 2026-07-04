@@ -70,10 +70,17 @@ jest.mock('../src/services/arkVisionClient', () => ({
   },
 }));
 
+jest.mock('../src/services/aiMonitoringService', () => ({
+  AIMonitoringService: {
+    recordCall: jest.fn(),
+  },
+}));
+
 import { llmClient } from '../src/services/llmClient';
 import { SearchService } from '../src/services/searchService';
 import { WebSearchService } from '../src/services/webSearchService';
 import { arkVisionClient } from '../src/services/arkVisionClient';
+import { AIMonitoringService } from '../src/services/aiMonitoringService';
 
 const DISCLAIMER = '以上内容来自社区、知识库和网络公开信息总结，仅供参考，不构成专业诊疗建议，复杂情况请及时联系动物医院。';
 
@@ -215,6 +222,43 @@ describe('AIService', () => {
       const createData = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[0][0].data;
       expect(createData.summary).toContain('图片显示眼周偏红');
       expect(createData.summary).toContain(DISCLAIMER);
+    });
+
+    it('records AI call outcomes for successful image and text model steps', async () => {
+      const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
+      (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (llmClient.classify as jest.Mock).mockResolvedValue('眼部问题');
+      (arkVisionClient.isConfigured as jest.Mock).mockReturnValue(true);
+      (arkVisionClient.analyzeImages as jest.Mock).mockResolvedValue('图片识别结果');
+      (SearchService.searchAll as jest.Mock).mockResolvedValue({ posts: [] });
+      (WebSearchService.search as jest.Mock).mockResolvedValue([]);
+      (prisma.aIAssistantSession.create as jest.Mock).mockResolvedValue({
+        ...mockSession,
+        imageUrls,
+        questionType: '眼部问题',
+        summary: '图片识别结果\n\n⚠️ ' + DISCLAIMER,
+      });
+
+      await AIService.runPipeline({
+        userId: 'user-1',
+        question: '帮我看下眼睛照片',
+        imageUrls,
+      });
+
+      expect(AIMonitoringService.recordCall).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-1',
+        provider: 'DEEPSEEK_TEXT',
+        operation: 'CLASSIFY',
+        status: 'SUCCESS',
+        imageCount: 1,
+      }));
+      expect(AIMonitoringService.recordCall).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-1',
+        provider: 'ARK_VISION',
+        operation: 'VISION_SUMMARY',
+        status: 'SUCCESS',
+        imageCount: 1,
+      }));
     });
 
     it('should fall back to text summary when Ark vision fails for attached images', async () => {

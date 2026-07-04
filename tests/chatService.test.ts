@@ -2,6 +2,7 @@ import { ChatService } from '../src/services/chatService';
 import { prisma } from '../src/config/database';
 import { llmClient } from '../src/services/llmClient';
 import { arkVisionClient } from '../src/services/arkVisionClient';
+import { AIMonitoringService } from '../src/services/aiMonitoringService';
 
 // Mock Prisma
 jest.mock('../src/config/database', () => ({
@@ -23,6 +24,11 @@ jest.mock('../src/config', () => ({
       apiKey: 'test-api-key',
       baseUrl: 'https://api.deepseek.com/v1',
       model: 'deepseek-chat',
+    },
+    ark: {
+      apiKey: 'ark-test-key',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      visionModel: 'doubao-seed-2-1-pro-260628',
     },
     encryption: { key: 'test-encryption-key-32bytes-ok!!!' },
   },
@@ -50,6 +56,12 @@ jest.mock('../src/services/arkVisionClient', () => ({
   arkVisionClient: {
     isConfigured: jest.fn(),
     analyzeImages: jest.fn(),
+  },
+}));
+
+jest.mock('../src/services/aiMonitoringService', () => ({
+  AIMonitoringService: {
+    recordCall: jest.fn(),
   },
 }));
 
@@ -274,6 +286,21 @@ describe('ChatService', () => {
 
       const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
       expect(assistantCall.summary).toContain('AI 服务暂时不可用');
+      expect(AIMonitoringService.recordCall).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-1',
+        provider: 'DEEPSEEK_TEXT',
+        operation: 'CHAT_TEXT',
+        status: 'FAILED',
+        imageCount: 0,
+        errorMessage: 'API timeout',
+      }));
+      expect(AIMonitoringService.recordCall).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 'user-1',
+        provider: 'FALLBACK',
+        operation: 'CHAT_FALLBACK_REPLY',
+        status: 'FALLBACK',
+        imageCount: 0,
+      }));
     });
 
     it('should store imageUrls and include image context in the LLM prompt', async () => {

@@ -3,6 +3,8 @@ import { logger } from '../utils/logger';
 import { llmClient } from './llmClient';
 import { arkVisionClient } from './arkVisionClient';
 import { AIService } from './aiService';
+import { AIMonitoringService } from './aiMonitoringService';
+import { config } from '../config';
 import type { AIAssistantSessionDTO, AIResultCardDTO } from '../types';
 import type { AIAssistantSession } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -110,9 +112,28 @@ export class ChatService {
           message,
           imageUrls,
         });
+        void AIMonitoringService.recordCall({
+          userId,
+          conversationId,
+          provider: 'ARK_VISION',
+          model: config.ark.visionModel,
+          operation: 'CHAT_VISION',
+          status: 'SUCCESS',
+          imageCount: imageUrls.length,
+        });
         usedVisionModel = true;
         logger.info(`Chat: Ark vision reply generated for conversation=${conversationId}`);
       } catch (error) {
+        void AIMonitoringService.recordCall({
+          userId,
+          conversationId,
+          provider: 'ARK_VISION',
+          model: config.ark.visionModel,
+          operation: 'CHAT_VISION',
+          status: 'FAILED',
+          imageCount: imageUrls.length,
+          errorMessage: (error as Error).message,
+        });
         logger.warn(`Chat: Ark vision failed, falling back: ${(error as Error).message}`);
       }
     }
@@ -123,14 +144,51 @@ export class ChatService {
           temperature: 0.7,
           maxTokens: 1000,
         });
+        void AIMonitoringService.recordCall({
+          userId,
+          conversationId,
+          provider: 'DEEPSEEK_TEXT',
+          model: config.llm.model,
+          operation: 'CHAT_TEXT',
+          status: 'SUCCESS',
+          imageCount: imageUrls.length,
+        });
         logger.info(`Chat: assistant reply generated for conversation=${conversationId}`);
       } catch (error) {
+        void AIMonitoringService.recordCall({
+          userId,
+          conversationId,
+          provider: 'DEEPSEEK_TEXT',
+          model: config.llm.model,
+          operation: 'CHAT_TEXT',
+          status: 'FAILED',
+          imageCount: imageUrls.length,
+          errorMessage: (error as Error).message,
+        });
         logger.warn(`Chat: LLM call failed, using fallback: ${(error as Error).message}`);
         assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
+        void AIMonitoringService.recordCall({
+          userId,
+          conversationId,
+          provider: 'FALLBACK',
+          operation: 'CHAT_FALLBACK_REPLY',
+          status: 'FALLBACK',
+          imageCount: imageUrls.length,
+          errorMessage: (error as Error).message,
+        });
       }
     } else {
       if (!assistantReply) {
         assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
+        void AIMonitoringService.recordCall({
+          userId,
+          conversationId,
+          provider: 'FALLBACK',
+          operation: 'CHAT_FALLBACK_REPLY',
+          status: 'FALLBACK',
+          imageCount: imageUrls.length,
+          errorMessage: 'LLM not configured',
+        });
       }
     }
     assistantReply = ChatService.normalizeAssistantReply(

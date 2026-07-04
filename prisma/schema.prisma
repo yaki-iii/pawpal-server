@@ -184,6 +184,7 @@ model User {
   emergencyHelps      EmergencyHelp[]
   searchLogs          SearchLog[]
   sosSearchLogs       SOSSearchLog[]
+  aiCallLogs          AICallLog[]
 
   @@map("users")
 }
@@ -657,6 +658,27 @@ model SOSSearchLog {
   @@index([resultStatus, createdAt])
   @@index([userId, createdAt])
   @@map("sos_search_logs")
+}
+
+model AICallLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  conversationId String   @default("")
+  provider       String
+  model          String   @default("")
+  operation      String
+  status         String
+  imageCount     Int      @default(0)
+  errorMessage   String   @default("")
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([provider, status, createdAt])
+  @@index([operation, status, createdAt])
+  @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+  @@map("ai_call_logs")
 }
 
 // ==================== Admin (管理后台) ====================

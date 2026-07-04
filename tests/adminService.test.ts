@@ -24,6 +24,10 @@ jest.mock('../src/config/database', () => ({
     aiAssistantSession: {
       count: jest.fn(),
     },
+    aiCallLog: {
+      count: jest.fn(),
+      create: jest.fn(),
+    },
     emergencyHelp: {
       count: jest.fn(),
     },
@@ -298,12 +302,15 @@ describe('AdminService', () => {
   describe('getDashboardAlerts', () => {
     it('returns actionable dashboard alerts for reports and configuration gaps', async () => {
       (prisma.contentReport.count as jest.Mock).mockResolvedValueOnce(4);
-      (prisma.aiAssistantSession.count as jest.Mock).mockResolvedValueOnce(2);
+      (prisma.aiCallLog.count as jest.Mock).mockResolvedValueOnce(2);
       (prisma.vetClinic.count as jest.Mock).mockResolvedValueOnce(0);
 
       const alerts = await AdminService.getDashboardAlerts();
 
       expect(prisma.contentReport.count).toHaveBeenCalledWith({ where: { status: 'PENDING' } });
+      expect(prisma.aiCallLog.count).toHaveBeenCalledWith({
+        where: { status: 'FALLBACK', imageCount: { gt: 0 } },
+      });
       expect(alerts).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: 'REPORTS_PENDING', severity: 'warning', count: 4 }),
         expect.objectContaining({ type: 'AI_IMAGE_FALLBACK', severity: 'warning', count: 2 }),
@@ -371,10 +378,20 @@ describe('AdminService', () => {
         .mockResolvedValueOnce(3)
         .mockResolvedValueOnce(4)
         .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(6);
+      (prisma.aiCallLog.count as jest.Mock)
+        .mockResolvedValueOnce(20)
+        .mockResolvedValueOnce(7)
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(3)
         .mockResolvedValueOnce(4)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(3)
         .mockResolvedValueOnce(5)
         .mockResolvedValueOnce(6);
       (prisma.emergencyHelp.count as jest.Mock)
@@ -400,8 +417,17 @@ describe('AdminService', () => {
         totalSessions: 12,
         todaySessions: 3,
         imageSessions: 4,
-        fallbackSessions: 2,
-        failureSessions: 1,
+        totalAICalls: 20,
+        todayAICalls: 6,
+        fallbackSessions: 5,
+        failureSessions: 3,
+        textSuccessCalls: 7,
+        textFailureCalls: 2,
+        textFallbackCalls: 3,
+        visionSuccessCalls: 4,
+        visionFailureCalls: 1,
+        visionFallbackCalls: 2,
+        imageFallbackCalls: 5,
         highRiskConsultations: {
           emergency: 2,
           medication: 3,
@@ -411,6 +437,9 @@ describe('AdminService', () => {
         },
         deepSeekConfigured: false,
         arkConfigured: false,
+        diagnostics: {
+          monitoringSource: 'AI_CALL_LOGS',
+        },
       }));
       expect(sos).toEqual(expect.objectContaining({
         totalHelpRequests: 5,

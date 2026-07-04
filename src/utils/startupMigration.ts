@@ -160,6 +160,29 @@ export async function runStartupMigrations(): Promise<void> {
       'sos_search_logs_userId_fkey',
       'ALTER TABLE "sos_search_logs" ADD CONSTRAINT "sos_search_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE',
     );
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "ai_call_logs" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT,
+        "conversationId" TEXT NOT NULL DEFAULT '',
+        "provider" TEXT NOT NULL,
+        "model" TEXT NOT NULL DEFAULT '',
+        "operation" TEXT NOT NULL,
+        "status" TEXT NOT NULL,
+        "imageCount" INTEGER NOT NULL DEFAULT 0,
+        "errorMessage" TEXT NOT NULL DEFAULT '',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ai_call_logs_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "ai_call_logs_provider_status_createdAt_idx" ON "ai_call_logs"("provider", "status", "createdAt")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "ai_call_logs_operation_status_createdAt_idx" ON "ai_call_logs"("operation", "status", "createdAt")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "ai_call_logs_userId_createdAt_idx" ON "ai_call_logs"("userId", "createdAt")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "ai_call_logs_conversationId_createdAt_idx" ON "ai_call_logs"("conversationId", "createdAt")');
+    await addForeignKeyIfMissing(
+      'ai_call_logs_userId_fkey',
+      'ALTER TABLE "ai_call_logs" ADD CONSTRAINT "ai_call_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE',
+    );
     await addForeignKeyIfMissing(
       'moment_comments_momentId_fkey',
       'ALTER TABLE "moment_comments" ADD CONSTRAINT "moment_comments_momentId_fkey" FOREIGN KEY ("momentId") REFERENCES "moments"("id") ON DELETE CASCADE ON UPDATE CASCADE',

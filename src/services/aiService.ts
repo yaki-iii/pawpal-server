@@ -4,6 +4,8 @@ import { llmClient } from './llmClient';
 import { arkVisionClient } from './arkVisionClient';
 import { SearchService } from './searchService';
 import { WebSearchService, type WebSearchResult } from './webSearchService';
+import { AIMonitoringService } from './aiMonitoringService';
+import { config } from '../config';
 import type { AIAssistantSessionDTO, AISource } from '../types';
 import type { AIAssistantSession } from '@prisma/client';
 
@@ -73,8 +75,25 @@ export class AIService {
     if (llmClient.isConfigured()) {
       try {
         questionType = await llmClient.classify(question, QUESTION_CATEGORIES);
+        void AIMonitoringService.recordCall({
+          userId,
+          provider: 'DEEPSEEK_TEXT',
+          model: config.llm.model,
+          operation: 'CLASSIFY',
+          status: 'SUCCESS',
+          imageCount: imageUrls.length,
+        });
         logger.info(`AI question type: ${questionType}`);
       } catch (error) {
+        void AIMonitoringService.recordCall({
+          userId,
+          provider: 'DEEPSEEK_TEXT',
+          model: config.llm.model,
+          operation: 'CLASSIFY',
+          status: 'FAILED',
+          imageCount: imageUrls.length,
+          errorMessage: (error as Error).message,
+        });
         logger.warn(`Question type classification failed, using default: ${(error as Error).message}`);
       }
     }
@@ -125,8 +144,25 @@ export class AIService {
           message: AIService.buildContextText(question, searchResults.posts, webResults),
           imageUrls,
         });
+        void AIMonitoringService.recordCall({
+          userId,
+          provider: 'ARK_VISION',
+          model: config.ark.visionModel,
+          operation: 'VISION_SUMMARY',
+          status: 'SUCCESS',
+          imageCount: imageUrls.length,
+        });
         logger.info('AI image summary generated successfully with Ark vision');
       } catch (error) {
+        void AIMonitoringService.recordCall({
+          userId,
+          provider: 'ARK_VISION',
+          model: config.ark.visionModel,
+          operation: 'VISION_SUMMARY',
+          status: 'FAILED',
+          imageCount: imageUrls.length,
+          errorMessage: (error as Error).message,
+        });
         logger.warn(`AI image summary failed, falling back to text summary: ${(error as Error).message}`);
       }
     }
@@ -144,16 +180,49 @@ export class AIService {
             { role: 'user', content: contextText },
           ];
           summary = await llmClient.chat(messages, { temperature: 0.7, maxTokens: 1000 });
+          void AIMonitoringService.recordCall({
+            userId,
+            provider: 'DEEPSEEK_TEXT',
+            model: config.llm.model,
+            operation: 'TEXT_SUMMARY',
+            status: 'SUCCESS',
+            imageCount: imageUrls.length,
+          });
           logger.info('AI summary generated successfully');
         } catch (error) {
+          void AIMonitoringService.recordCall({
+            userId,
+            provider: 'DEEPSEEK_TEXT',
+            model: config.llm.model,
+            operation: 'TEXT_SUMMARY',
+            status: 'FAILED',
+            imageCount: imageUrls.length,
+            errorMessage: (error as Error).message,
+          });
           logger.warn(`AI summary failed, using fallback: ${(error as Error).message}`);
           summary = AIService.buildFallbackSummary(searchResults.posts, webResults);
+          void AIMonitoringService.recordCall({
+            userId,
+            provider: 'FALLBACK',
+            operation: 'SEARCH_FALLBACK_SUMMARY',
+            status: 'FALLBACK',
+            imageCount: imageUrls.length,
+            errorMessage: (error as Error).message,
+          });
         }
       }
     } else {
       // LLM not configured — use fallback summary from search results
       if (!summary) {
         summary = AIService.buildFallbackSummary(searchResults.posts, webResults);
+        void AIMonitoringService.recordCall({
+          userId,
+          provider: 'FALLBACK',
+          operation: 'SEARCH_FALLBACK_SUMMARY',
+          status: 'FALLBACK',
+          imageCount: imageUrls.length,
+          errorMessage: 'LLM not configured',
+        });
       }
     }
 

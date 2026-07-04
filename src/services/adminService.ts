@@ -405,15 +405,7 @@ export class AdminService {
   }>> {
     const [pendingReports, aiFallbacks, localVetClinics] = await Promise.all([
       prisma.contentReport.count({ where: { status: 'PENDING' } }),
-      prisma.aiAssistantSession.count({
-        where: {
-          OR: [
-            { summary: { contains: 'fallback', mode: 'insensitive' } },
-            { summary: { contains: '暂时无法', mode: 'insensitive' } },
-            { summary: { contains: '无法识别图片', mode: 'insensitive' } },
-          ],
-        },
-      }),
+      prisma.aiCallLog.count({ where: { status: 'FALLBACK', imageCount: { gt: 0 } } }),
       prisma.vetClinic.count(),
     ]);
 
@@ -473,8 +465,17 @@ export class AdminService {
       totalSessions,
       todaySessions,
       imageSessions,
-      fallbackSessions,
-      failureSessions,
+      totalAICalls,
+      textSuccessCalls,
+      textFailureCalls,
+      textFallbackCalls,
+      visionSuccessCalls,
+      visionFailureCalls,
+      visionFallbackCalls,
+      totalFallbackCalls,
+      totalFailureCalls,
+      imageFallbackCalls,
+      todayAICalls,
       emergencyConsultations,
       medicationConsultations,
       dietConsultations,
@@ -484,25 +485,17 @@ export class AdminService {
       prisma.aiAssistantSession.count(),
       prisma.aiAssistantSession.count({ where: { createdAt: { gte: today } } }),
       prisma.aiAssistantSession.count({ where: { imageUrls: { isEmpty: false } } }),
-      prisma.aiAssistantSession.count({
-        where: {
-          OR: [
-            { summary: { contains: 'fallback', mode: 'insensitive' } },
-            { summary: { contains: '暂时无法', mode: 'insensitive' } },
-            { summary: { contains: '无法识别图片', mode: 'insensitive' } },
-          ],
-        },
-      }),
-      prisma.aiAssistantSession.count({
-        where: {
-          OR: [
-            { summary: { contains: '错误', mode: 'insensitive' } },
-            { summary: { contains: '失败', mode: 'insensitive' } },
-            { summary: { contains: 'timeout', mode: 'insensitive' } },
-            { summary: { contains: 'error', mode: 'insensitive' } },
-          ],
-        },
-      }),
+      prisma.aiCallLog.count(),
+      prisma.aiCallLog.count({ where: { provider: 'DEEPSEEK_TEXT', status: 'SUCCESS' } }),
+      prisma.aiCallLog.count({ where: { provider: 'DEEPSEEK_TEXT', status: 'FAILED' } }),
+      prisma.aiCallLog.count({ where: { provider: 'DEEPSEEK_TEXT', status: 'FALLBACK' } }),
+      prisma.aiCallLog.count({ where: { provider: 'ARK_VISION', status: 'SUCCESS' } }),
+      prisma.aiCallLog.count({ where: { provider: 'ARK_VISION', status: 'FAILED' } }),
+      prisma.aiCallLog.count({ where: { provider: 'ARK_VISION', status: 'FALLBACK' } }),
+      prisma.aiCallLog.count({ where: { status: 'FALLBACK' } }),
+      prisma.aiCallLog.count({ where: { status: 'FAILED' } }),
+      prisma.aiCallLog.count({ where: { status: 'FALLBACK', imageCount: { gt: 0 } } }),
+      prisma.aiCallLog.count({ where: { createdAt: { gte: today } } }),
       AdminService.countAIConsultations(['急症', '紧急', '抽搐', '中毒', '呼吸困难']),
       AdminService.countAIConsultations(['用药', '药', '剂量', '抗生素']),
       AdminService.countAIConsultations(['饮食', '喂食', '粮', '呕吐', '腹泻']),
@@ -514,8 +507,17 @@ export class AdminService {
       totalSessions,
       todaySessions,
       imageSessions,
-      fallbackSessions,
-      failureSessions,
+      totalAICalls,
+      todayAICalls,
+      textSuccessCalls,
+      textFailureCalls,
+      textFallbackCalls,
+      visionSuccessCalls,
+      visionFailureCalls,
+      visionFallbackCalls,
+      imageFallbackCalls,
+      fallbackSessions: totalFallbackCalls,
+      failureSessions: totalFailureCalls,
       highRiskConsultations: {
         emergency: emergencyConsultations,
         medication: medicationConsultations,
@@ -527,6 +529,9 @@ export class AdminService {
       arkConfigured: AdminService.hasConfiguredSecret(config.ark.apiKey, ['your-ark-api-key-here']),
       model: config.llm.model,
       visionModel: config.ark.visionModel,
+      diagnostics: {
+        monitoringSource: 'AI_CALL_LOGS',
+      },
     };
   }
 
