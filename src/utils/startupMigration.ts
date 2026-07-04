@@ -124,6 +124,21 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "moment_comments_momentId_idx" ON "moment_comments"("momentId")');
     await prisma.$executeRawUnsafe('ALTER TABLE "moment_comments" ADD COLUMN IF NOT EXISTS "isRemoved" BOOLEAN NOT NULL DEFAULT false');
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "search_logs" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT,
+        "keyword" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "search_logs_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "search_logs_keyword_createdAt_idx" ON "search_logs"("keyword", "createdAt")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "search_logs_userId_createdAt_idx" ON "search_logs"("userId", "createdAt")');
+    await addForeignKeyIfMissing(
+      'search_logs_userId_fkey',
+      'ALTER TABLE "search_logs" ADD CONSTRAINT "search_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE',
+    );
     await addForeignKeyIfMissing(
       'moment_comments_momentId_fkey',
       'ALTER TABLE "moment_comments" ADD CONSTRAINT "moment_comments_momentId_fkey" FOREIGN KEY ("momentId") REFERENCES "moments"("id") ON DELETE CASCADE ON UPDATE CASCADE',

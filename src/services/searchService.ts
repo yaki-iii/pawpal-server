@@ -24,10 +24,25 @@ const TRENDING_KEYWORDS = [
  * Uses PostgreSQL ILIKE for MVP (pg_trgm can be added later for better fuzzy matching).
  */
 export class SearchService {
-  static trendingKeywords(limit: number = 8): string[] {
+  static async trendingKeywords(limit: number = 8): Promise<string[]> {
     const normalizedLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 20) : 8;
-    return [...new Set(TRENDING_KEYWORDS.map((keyword) => keyword.trim()).filter(Boolean))]
-      .slice(0, normalizedLimit);
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const fallbackKeywords = SearchService.curatedKeywords(normalizedLimit);
+
+    try {
+      const rows = await prisma.searchLog.groupBy({
+        by: ['keyword'],
+        where: { createdAt: { gte: since } },
+        _count: { keyword: true },
+        orderBy: { _count: { keyword: 'desc' } },
+        take: normalizedLimit,
+      });
+      const realKeywords = rows.map((row) => row.keyword.trim()).filter(Boolean);
+      return SearchService.mergeKeywords(realKeywords, fallbackKeywords, normalizedLimit);
+    } catch (error) {
+      logger.warn(`Search trending keywords fallback: ${(error as Error).message}`);
+      return fallbackKeywords;
+    }
   }
 
   /**
@@ -142,10 +157,36 @@ export class SearchService {
       SearchService.searchPets(keyword, userId, limit),
       SearchService.searchMoments(keyword, limit),
     ]);
+    await SearchService.recordSearch(keyword, userId);
     logger.info(
       `Search "${keyword}": ${posts.length} posts, ${circles.length} circles, ` +
         `${users.length} users, ${pets.length} pets, ${moments.length} moments`,
     );
     return { posts, circles, users, pets, moments };
+  }
+
+  private static curatedKeywords(limit: number): string[] {
+    return SearchService.mergeKeywords(TRENDING_KEYWORDS, [], limit);
+  }
+
+  private static mergeKeywords(primary: string[], fallback: string[], limit: number): string[] {
+    return [...new Set([...primary, ...fallback].map((keyword) => keyword.trim()).filter(Boolean))]
+      .slice(0, limit);
+  }
+
+  private static async recordSearch(keyword: string, userId?: string): Promise<void> {
+    const normalizedKeyword = keyword.trim();
+    if (!normalizedKeyword) return;
+
+    try {
+      await prisma.searchLog.create({
+        data: {
+          keyword: normalizedKeyword,
+          userId,
+        },
+      });
+    } catch (error) {
+      logger.warn(`Search log skipped: ${(error as Error).message}`);
+    }
   }
 }

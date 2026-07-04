@@ -8,6 +8,10 @@ jest.mock('../src/config/database', () => ({
     user: { findMany: jest.fn() },
     pet: { findMany: jest.fn() },
     moment: { findMany: jest.fn() },
+    searchLog: {
+      create: jest.fn(),
+      groupBy: jest.fn(),
+    },
   },
 }));
 
@@ -53,15 +57,27 @@ const pet = {
 describe('SearchService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (prisma.searchLog.groupBy as jest.Mock).mockResolvedValue([]);
+    (prisma.searchLog.create as jest.Mock).mockResolvedValue({});
   });
 
   describe('searchAll', () => {
-    it('should return curated trending keywords with stable ordering and limit', () => {
-      const keywords = SearchService.trendingKeywords(4);
+    it('should return real trending keywords first and fill with curated fallback keywords', async () => {
+      (prisma.searchLog.groupBy as jest.Mock).mockResolvedValue([
+        { keyword: '布偶猫', _count: { keyword: 8 } },
+        { keyword: '猫咪呕吐', _count: { keyword: 5 } },
+      ]);
 
-      expect(keywords).toEqual(['疫苗', '驱虫', '猫咪呕吐', '狗狗皮肤']);
+      const keywords = await SearchService.trendingKeywords(4);
+
+      expect(keywords).toEqual(['布偶猫', '猫咪呕吐', '疫苗', '驱虫']);
       expect(new Set(keywords).size).toBe(keywords.length);
       expect(keywords.every((keyword) => keyword.trim().length > 0)).toBe(true);
+      expect(prisma.searchLog.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+        by: ['keyword'],
+        orderBy: { _count: { keyword: 'desc' } },
+        take: 4,
+      }));
     });
 
     it('should return grouped global results for posts, circles, users, pets and moments', async () => {
@@ -142,6 +158,31 @@ describe('SearchService', () => {
       expect(prisma.pet.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ userId: 'user-1' }),
       }));
+      expect(prisma.searchLog.create).toHaveBeenCalledWith({
+        data: {
+          keyword: '布偶',
+          userId: 'user-1',
+        },
+      });
+    });
+
+    it('should not fail search when search log recording fails', async () => {
+      (prisma.post.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.circle.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.pet.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.moment.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.searchLog.create as jest.Mock).mockRejectedValue(new Error('log table unavailable'));
+
+      const result = await SearchService.searchAll('布偶', 5, 'user-1');
+
+      expect(result).toEqual({
+        posts: [],
+        circles: [],
+        users: [],
+        pets: [],
+        moments: [],
+      });
     });
 
     it('should only search public moments', async () => {

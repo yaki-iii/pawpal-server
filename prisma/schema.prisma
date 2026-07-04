@@ -182,6 +182,7 @@ model User {
   momentLikes         MomentLike[]
   momentComments      MomentComment[]
   emergencyHelps      EmergencyHelp[]
+  searchLogs          SearchLog[]
 
   @@map("users")
 }
@@ -623,6 +624,19 @@ model VetClinic {
 
   @@index([lat, lng])
   @@map("vet_clinics")
+}
+
+model SearchLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  keyword   String
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([keyword, createdAt])
+  @@index([userId, createdAt])
+  @@map("search_logs")
 }
 
 // ==================== Admin (管理后台) ====================

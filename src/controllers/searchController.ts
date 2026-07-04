@@ -7,7 +7,7 @@ export class SearchController {
     try {
       const rawLimit = Number(req.query.limit || 8);
       const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.floor(rawLimit), 1), 20) : 8;
-      const keywords = SearchService.trendingKeywords(limit);
+      const keywords = await SearchService.trendingKeywords(limit);
       sendSuccess(res, keywords);
     } catch (error) {
       sendError(res, 500, (error as Error).message || '获取推荐搜索失败');
