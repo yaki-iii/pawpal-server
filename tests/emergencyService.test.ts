@@ -548,6 +548,86 @@ describe('EmergencyHelpService', () => {
       });
     });
 
+    it('should fall back to AMap text search when around search returns no vets', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            pois: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            pois: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            pois: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            regeocode: {
+              formatted_address: '广东省广州市天河区珠江新城',
+              addressComponent: {
+                city: '广州市',
+                district: '天河区',
+              },
+            },
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            pois: [
+              {
+                id: 'TEXT001',
+                name: '珠江新城动物医院',
+                address: '广州市天河区测试路1号',
+                cityname: '广州市',
+                adname: '天河区',
+                location: '113.3338,23.1198',
+                tel: '020-12345678',
+                distance: '800',
+                biz_ext: { rating: '4.7', open_time: '09:00-21:00', open_status: '营业中' },
+              },
+            ],
+          }),
+        });
+      (prisma.vetClinic.findMany as jest.Mock).mockResolvedValue([]);
+
+      const result = await EmergencyHelpService.listNearbyVets(23.1198, 113.3338, 5, { source: 'MANUAL_LOCATION' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'amap-TEXT001',
+          name: '珠江新城动物医院',
+          phone: '020-12345678',
+          city: '广州市 天河区',
+        }),
+      );
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/place/text?'));
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('keywords=%E5%8A%A8%E7%89%A9%E5%8C%BB%E9%99%A2'));
+      expect(prisma.vetClinic.findMany).not.toHaveBeenCalled();
+      expect(prisma.sosSearchLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          source: 'MANUAL_LOCATION',
+          resultStatus: 'AMAP_SUCCESS',
+          resultCount: 1,
+        }),
+      });
+    });
+
     it('should return vets sorted by distance', async () => {
       // Two clinics: one 1km away, one 5km away
       (prisma.vetClinic.findMany as jest.Mock).mockResolvedValue([

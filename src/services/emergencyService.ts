@@ -381,9 +381,14 @@ export class EmergencyHelpService {
 
     try {
       const keywords = ['宠物医院', '动物医院', '兽医诊所'];
-      const results = await Promise.all(
-        keywords.map((keyword) => EmergencyHelpService.searchAMapVetsAround(lat, lng, limit, keyword)),
-      );
+      const results: Array<{ vets: VetClinicDTO[]; errorMessage?: string }> = [];
+      for (const keyword of keywords) {
+        const result = await EmergencyHelpService.searchAMapVetsAround(lat, lng, limit, keyword);
+        results.push(result);
+        if (results.reduce((count, item) => count + item.vets.length, 0) >= limit) {
+          break;
+        }
+      }
       const errorMessage = results.find((result) => result.errorMessage)?.errorMessage;
       const vets = Array.from(
         new Map(
@@ -394,11 +399,90 @@ export class EmergencyHelpService {
       )
         .sort((a, b) => (a.distanceMeters ?? Number.MAX_SAFE_INTEGER) - (b.distanceMeters ?? Number.MAX_SAFE_INTEGER))
         .slice(0, limit);
+      if (vets.length === 0) {
+        try {
+          const textSearchVets = await EmergencyHelpService.listNearbyVetsFromAMapText(lat, lng, limit);
+          if (textSearchVets.length > 0) {
+            return { vets: textSearchVets, errorMessage };
+          }
+        } catch (textError) {
+          logger.warn(`AMap vet text fallback unavailable: ${(textError as Error).message}`);
+        }
+      }
       return { vets, errorMessage };
     } catch (error) {
       logger.warn(`AMap vet search unavailable: ${(error as Error).message}`);
       return { vets: [], errorMessage: (error as Error).message };
     }
+  }
+
+  private static async listNearbyVetsFromAMapText(
+    lat: number,
+    lng: number,
+    limit: number,
+  ): Promise<VetClinicDTO[]> {
+    const location = await EmergencyHelpService.reverseGeocodeLocation(lat, lng);
+    const city = location.city || location.district || location.displayName;
+    const keywords = ['动物医院', '宠物医院', '兽医诊所'];
+    const results: VetClinicDTO[] = [];
+    for (const keyword of keywords) {
+      try {
+        results.push(...await EmergencyHelpService.searchAMapVetsByText(city, keyword, limit));
+      } catch (error) {
+        logger.warn(`AMap vet text search unavailable for ${keyword}: ${(error as Error).message}`);
+        if (results.length > 0) break;
+        throw error;
+      }
+      if (results.length >= limit) break;
+    }
+    return Array.from(
+      new Map(
+        results
+          .flat()
+          .map((vet) => ({
+            ...vet,
+            distance: EmergencyHelpService.haversineDistance(lat, lng, vet.lat, vet.lng),
+          }))
+          .map((vet) => ({
+            ...vet,
+            distanceMeters: Math.round((vet.distance ?? 0) * 1000),
+          }))
+          .map((vet) => [vet.id, vet]),
+      ).values(),
+    )
+      .sort((a, b) => (a.distanceMeters ?? Number.MAX_SAFE_INTEGER) - (b.distanceMeters ?? Number.MAX_SAFE_INTEGER))
+      .slice(0, limit);
+  }
+
+  private static async searchAMapVetsByText(
+    city: string,
+    keyword: string,
+    limit: number,
+  ): Promise<VetClinicDTO[]> {
+    const params = new URLSearchParams({
+      key: config.amap.webServiceKey,
+      city,
+      keywords: keyword,
+      citylimit: 'false',
+      offset: String(Math.min(Math.max(limit, 1), 25)),
+      page: '1',
+      extensions: 'all',
+    });
+
+    const response = await fetch(`${config.amap.placeTextUrl}?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = (await response.json()) as AMapPlaceTextResponse;
+    if (data.status !== '1') {
+      logger.warn(`AMap vet text search failed: ${data.info || 'unknown error'}`);
+      throw new Error(data.info || 'AMap text status not ok');
+    }
+
+    return (data.pois || [])
+      .map((poi) => EmergencyHelpService.toAMapVetDTO(poi))
+      .filter((vet): vet is VetClinicDTO => vet !== null);
   }
 
   private static async searchAMapVetsAround(
