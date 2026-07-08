@@ -11,7 +11,7 @@ const router = Router();
 router.use(requireAuth);
 
 // Validation schema for pet creation/update
-const petSchema = z.object({
+const petCreateBaseSchema = z.object({
   name: z.string().min(1, '请输入宠物名称').max(20, '名称最多20字'),
   species: z.enum(['DOG', 'CAT']),
   breed: z.string().min(1, '请选择品种'),
@@ -21,20 +21,45 @@ const petSchema = z.object({
   photo: z.string().optional().default(''),
   avatarUrl: z.string().optional(),
   neutered: z.boolean().default(false),
-}).transform((data) => {
+});
+
+const petUpdateBaseSchema = z.object({
+  name: z.string().min(1, '请输入宠物名称').max(20, '名称最多20字').optional(),
+  species: z.enum(['DOG', 'CAT']).optional(),
+  breed: z.string().min(1, '请选择品种').optional(),
+  gender: z.enum(['MALE', 'FEMALE']).optional(),
+  birthday: z.string().optional(),
+  weight: z.number().min(0, '体重不能为负').max(200, '体重数值过大').optional(),
+  photo: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  neutered: z.boolean().optional(),
+});
+
+const normalizeCreatePetPhoto = <T extends { photo?: string; avatarUrl?: string }>(data: T) => {
   const { avatarUrl, ...pet } = data;
   return {
     ...pet,
     photo: pet.photo || avatarUrl || '',
   };
-});
+};
+
+const normalizeUpdatePetPhoto = <T extends { photo?: string; avatarUrl?: string }>(data: T) => {
+  const { avatarUrl, ...pet } = data;
+  if (pet.photo === undefined && avatarUrl !== undefined) {
+    return { ...pet, photo: avatarUrl };
+  }
+  return pet;
+};
+
+export const petSchema = petCreateBaseSchema.transform(normalizeCreatePetPhoto);
+export const petUpdateSchema = petUpdateBaseSchema.transform(normalizeUpdatePetPhoto);
 
 // Routes
 router.get('/', PetController.list);
 router.get('/:petId/album', AlbumController.getPetAlbum);
 router.get('/:id', PetController.getById);
 router.post('/', validateBody(petSchema), PetController.create);
-router.put('/:id', validateBody(petSchema.partial()), PetController.update);
+router.put('/:id', validateBody(petUpdateSchema), PetController.update);
 router.delete('/:id', PetController.delete);
 
 export default router;

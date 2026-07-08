@@ -15,7 +15,14 @@ describe('server startup', () => {
       createApp: jest.fn(() => appMock),
     }));
     jest.doMock('../src/config', () => ({
-      config: { port: 4321, nodeEnv: 'test' },
+      config: {
+        port: 4321,
+        nodeEnv: 'test',
+        upload: { dir: 'uploads' },
+        rateLimit: { aiPerHour: 20, authPer15Min: 10 },
+        jwt: { secret: 'test-secret', expiresIn: '7d' },
+        admin: { jwtSecret: 'test-admin-secret', jwtExpiresIn: '12h' },
+      },
     }));
     jest.doMock('../src/utils/logger', () => ({
       logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn() },
@@ -71,6 +78,27 @@ describe('app health metadata', () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v04-ai-sos-composer-fix-20260708');
+    expect(BUILD_ID).toBe('pawpal-v04-render-pet-schema-fix-20260709');
+  });
+});
+
+describe('app route registration', () => {
+  it('imports the real app without route schema startup errors', async () => {
+    jest.resetModules();
+    jest.unmock('../src/app');
+    jest.unmock('../src/routes');
+    jest.unmock('../src/routes/petRoutes');
+    jest.doMock('../src/config/database', () => ({
+      prisma: {
+        $queryRaw: jest.fn(),
+      },
+    }));
+    jest.doMock('../src/utils/logger', () => ({
+      logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
+    }));
+
+    const { createApp } = await import('../src/app');
+
+    expect(() => createApp()).not.toThrow();
   });
 });

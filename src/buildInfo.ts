@@ -1,1 +1,1 @@
-export const BUILD_ID = 'pawpal-v04-ai-sos-composer-fix-20260708';
+export const BUILD_ID = 'pawpal-v04-render-pet-schema-fix-20260709';
