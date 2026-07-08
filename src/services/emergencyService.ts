@@ -31,6 +31,12 @@ interface AMapAroundResponse {
   pois?: AMapPoi[];
 }
 
+interface AMapPlaceTextResponse {
+  status?: string;
+  info?: string;
+  pois?: AMapPoi[];
+}
+
 interface AMapGeocode {
   formatted_address?: string;
   province?: string;
@@ -243,17 +249,22 @@ export class EmergencyHelpService {
     try {
       const geocode = await EmergencyHelpService.fetchAMapGeocode(cleanCity, cleanAddress)
         || await EmergencyHelpService.fetchAMapGeocode(cleanCity, `${cleanCity}${cleanAddress}`);
-      const [longitude, latitude] = EmergencyHelpService.parseAMapLocation(geocode?.location);
-      if (!geocode || latitude == null || longitude == null) {
+      const place = geocode
+        ? null
+        : await EmergencyHelpService.searchAMapPlaceText(cleanCity, cleanAddress)
+          || await EmergencyHelpService.searchAMapPlaceText(cleanCity, `${cleanCity}${cleanAddress}`);
+      const locationText = geocode?.location || place?.location;
+      const [longitude, latitude] = EmergencyHelpService.parseAMapLocation(locationText);
+      if ((!geocode && !place) || latitude == null || longitude == null) {
         throw new Error('未找到该位置，请补充更具体的地址');
       }
 
       return {
         latitude,
         longitude,
-        displayName: geocode.formatted_address || `${cleanCity}${cleanAddress}`,
-        city: EmergencyHelpService.firstAMapText(geocode.city) || cleanCity,
-        district: EmergencyHelpService.firstAMapText(geocode.district),
+        displayName: geocode?.formatted_address || place?.name || `${cleanCity}${cleanAddress}`,
+        city: EmergencyHelpService.firstAMapText(geocode?.city) || EmergencyHelpService.firstAMapText(place?.cityname) || cleanCity,
+        district: EmergencyHelpService.firstAMapText(geocode?.district) || EmergencyHelpService.firstAMapText(place?.adname),
       };
     } catch (error) {
       const message = (error as Error).message;
@@ -283,6 +294,30 @@ export class EmergencyHelpService {
     }
 
     return data.geocodes?.[0] || null;
+  }
+
+  private static async searchAMapPlaceText(city: string, keywords: string): Promise<AMapPoi | null> {
+    const params = new URLSearchParams({
+      key: config.amap.webServiceKey,
+      city,
+      keywords,
+      citylimit: 'false',
+      offset: '1',
+      page: '1',
+      extensions: 'all',
+    });
+    const response = await fetch(`${config.amap.placeTextUrl}?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = (await response.json()) as AMapPlaceTextResponse;
+    if (data.status !== '1') {
+      logger.warn(`AMap place text failed: ${data.info || 'unknown error'}`);
+      throw new Error('位置搜索失败，请稍后再试');
+    }
+
+    return data.pois?.[0] || null;
   }
 
   static async reverseGeocodeLocation(lat: number, lng: number): Promise<ManualLocationDTO> {
@@ -345,38 +380,61 @@ export class EmergencyHelpService {
     }
 
     try {
-      const params = new URLSearchParams({
-        key: config.amap.webServiceKey,
-        location: `${lng},${lat}`,
-        keywords: '宠物医院',
-        radius: '10000',
-        sortrule: 'distance',
-        offset: String(Math.min(Math.max(limit, 1), 25)),
-        page: '1',
-        extensions: 'all',
-      });
-
-      const response = await fetch(`${config.amap.placeAroundUrl}?${params.toString()}`);
-      if (!response.ok) {
-        logger.warn(`AMap vet search failed: HTTP ${response.status}`);
-        return { vets: [], errorMessage: `HTTP ${response.status}` };
-      }
-
-      const data = (await response.json()) as AMapAroundResponse;
-      if (data.status !== '1') {
-        logger.warn(`AMap vet search failed: ${data.info || 'unknown error'}`);
-        return { vets: [], errorMessage: data.info || 'AMap status not ok' };
-      }
-
-      const vets = (data.pois || [])
-        .map((poi) => EmergencyHelpService.toAMapVetDTO(poi))
-        .filter((vet): vet is VetClinicDTO => vet !== null)
+      const keywords = ['宠物医院', '动物医院', '兽医诊所'];
+      const results = await Promise.all(
+        keywords.map((keyword) => EmergencyHelpService.searchAMapVetsAround(lat, lng, limit, keyword)),
+      );
+      const errorMessage = results.find((result) => result.errorMessage)?.errorMessage;
+      const vets = Array.from(
+        new Map(
+          results
+            .flatMap((result) => result.vets)
+            .map((vet) => [vet.id, vet]),
+        ).values(),
+      )
+        .sort((a, b) => (a.distanceMeters ?? Number.MAX_SAFE_INTEGER) - (b.distanceMeters ?? Number.MAX_SAFE_INTEGER))
         .slice(0, limit);
-      return { vets };
+      return { vets, errorMessage };
     } catch (error) {
       logger.warn(`AMap vet search unavailable: ${(error as Error).message}`);
       return { vets: [], errorMessage: (error as Error).message };
     }
+  }
+
+  private static async searchAMapVetsAround(
+    lat: number,
+    lng: number,
+    limit: number,
+    keyword: string,
+  ): Promise<{ vets: VetClinicDTO[]; errorMessage?: string }> {
+    const params = new URLSearchParams({
+      key: config.amap.webServiceKey,
+      location: `${lng},${lat}`,
+      keywords: keyword,
+      radius: '30000',
+      sortrule: 'distance',
+      offset: String(Math.min(Math.max(limit, 1), 25)),
+      page: '1',
+      extensions: 'all',
+    });
+
+    const response = await fetch(`${config.amap.placeAroundUrl}?${params.toString()}`);
+    if (!response.ok) {
+      logger.warn(`AMap vet search failed: HTTP ${response.status}`);
+      return { vets: [], errorMessage: `HTTP ${response.status}` };
+    }
+
+    const data = (await response.json()) as AMapAroundResponse;
+    if (data.status !== '1') {
+      logger.warn(`AMap vet search failed: ${data.info || 'unknown error'}`);
+      return { vets: [], errorMessage: data.info || 'AMap status not ok' };
+    }
+
+    return {
+      vets: (data.pois || [])
+        .map((poi) => EmergencyHelpService.toAMapVetDTO(poi))
+        .filter((vet): vet is VetClinicDTO => vet !== null),
+    };
   }
 
   private static async listNearbyVetsFromDB(

@@ -29,6 +29,8 @@ jest.mock('../src/config', () => ({
     encryption: { key: 'test-encryption-key-32bytes-ok!!!' },
     amap: {
       webServiceKey: 'test-amap-key',
+      placeAroundUrl: 'https://restapi.amap.com/v3/place/around',
+      placeTextUrl: 'https://restapi.amap.com/v3/place/text',
       geocodeUrl: 'https://restapi.amap.com/v3/geocode/geo',
       regeoUrl: 'https://restapi.amap.com/v3/geocode/regeo',
     },
@@ -319,6 +321,53 @@ describe('EmergencyHelpService', () => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
       expect(global.fetch).toHaveBeenLastCalledWith(
         expect.stringContaining('address=%E5%B9%BF%E5%B7%9E%E5%A4%A9%E6%B2%B3%E5%8C%BA%E4%BD%93%E8%82%B2%E8%A5%BF%E8%B7%AF'),
+      );
+    });
+
+    it('should fall back to AMap place text search when geocode has no result', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            geocodes: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            geocodes: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            pois: [
+              {
+                id: 'P001',
+                name: '珠江新城',
+                cityname: '广州市',
+                adname: '天河区',
+                location: '113.324900,23.119300',
+              },
+            ],
+          }),
+        });
+
+      const result = await EmergencyHelpService.geocodeManualLocation('广州', '珠江新城');
+
+      expect(result).toEqual({
+        latitude: 23.1193,
+        longitude: 113.3249,
+        displayName: '珠江新城',
+        city: '广州市',
+        district: '天河区',
+      });
+      expect(global.fetch).toHaveBeenLastCalledWith(expect.stringContaining('/place/text?'));
+      expect(global.fetch).toHaveBeenLastCalledWith(
+        expect.stringContaining('keywords=%E7%8F%A0%E6%B1%9F%E6%96%B0%E5%9F%8E'),
       );
     });
 

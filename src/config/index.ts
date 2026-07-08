@@ -60,6 +60,7 @@ export const config = {
   amap: {
     webServiceKey: process.env.AMAP_WEB_SERVICE_KEY || '',
     placeAroundUrl: process.env.AMAP_PLACE_AROUND_URL || 'https://restapi.amap.com/v3/place/around',
+    placeTextUrl: process.env.AMAP_PLACE_TEXT_URL || 'https://restapi.amap.com/v3/place/text',
     geocodeUrl: process.env.AMAP_GEOCODE_URL || 'https://restapi.amap.com/v3/geocode/geo',
     regeoUrl: process.env.AMAP_REGEO_URL || 'https://restapi.amap.com/v3/geocode/regeo',
   },
