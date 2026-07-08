@@ -240,25 +240,9 @@ export class EmergencyHelpService {
       throw new Error('位置搜索服务暂不可用');
     }
 
-    const params = new URLSearchParams({
-      key: config.amap.webServiceKey,
-      city: cleanCity,
-      address: cleanAddress,
-    });
-
     try {
-      const response = await fetch(`${config.amap.geocodeUrl}?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = (await response.json()) as AMapGeocodeResponse;
-      if (data.status !== '1') {
-        logger.warn(`AMap geocode failed: ${data.info || 'unknown error'}`);
-        throw new Error('位置搜索失败，请稍后再试');
-      }
-
-      const geocode = data.geocodes?.[0];
+      const geocode = await EmergencyHelpService.fetchAMapGeocode(cleanCity, cleanAddress)
+        || await EmergencyHelpService.fetchAMapGeocode(cleanCity, `${cleanCity}${cleanAddress}`);
       const [longitude, latitude] = EmergencyHelpService.parseAMapLocation(geocode?.location);
       if (!geocode || latitude == null || longitude == null) {
         throw new Error('未找到该位置，请补充更具体的地址');
@@ -279,6 +263,26 @@ export class EmergencyHelpService {
       logger.warn(`AMap geocode unavailable: ${message}`);
       throw new Error('位置搜索失败，请稍后再试');
     }
+  }
+
+  private static async fetchAMapGeocode(city: string, address: string): Promise<AMapGeocode | null> {
+    const params = new URLSearchParams({
+      key: config.amap.webServiceKey,
+      city,
+      address,
+    });
+    const response = await fetch(`${config.amap.geocodeUrl}?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = (await response.json()) as AMapGeocodeResponse;
+    if (data.status !== '1') {
+      logger.warn(`AMap geocode failed: ${data.info || 'unknown error'}`);
+      throw new Error('位置搜索失败，请稍后再试');
+    }
+
+    return data.geocodes?.[0] || null;
   }
 
   static async reverseGeocodeLocation(lat: number, lng: number): Promise<ManualLocationDTO> {

@@ -286,6 +286,42 @@ describe('EmergencyHelpService', () => {
       ).rejects.toThrow('未找到该位置');
     });
 
+    it('should retry manual geocode with city plus address when split fields have no result', async () => {
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            geocodes: [],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: jest.fn().mockResolvedValue({
+            status: '1',
+            geocodes: [
+              {
+                formatted_address: '广东省广州市天河区体育西路',
+                province: '广东省',
+                city: '广州市',
+                district: '天河区',
+                location: '113.321200,23.131100',
+              },
+            ],
+          }),
+        });
+
+      const result = await EmergencyHelpService.geocodeManualLocation('广州', '天河区体育西路');
+
+      expect(result.displayName).toBe('广东省广州市天河区体育西路');
+      expect(result.latitude).toBe(23.1311);
+      expect(result.longitude).toBe(113.3212);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenLastCalledWith(
+        expect.stringContaining('address=%E5%B9%BF%E5%B7%9E%E5%A4%A9%E6%B2%B3%E5%8C%BA%E4%BD%93%E8%82%B2%E8%A5%BF%E8%B7%AF'),
+      );
+    });
+
     it('should reverse geocode coordinates with AMap place names', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
