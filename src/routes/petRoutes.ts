@@ -19,7 +19,14 @@ const petSchema = z.object({
   birthday: z.string().optional().default(''),
   weight: z.number().min(0, '体重不能为负').max(200, '体重数值过大'),
   photo: z.string().optional().default(''),
+  avatarUrl: z.string().optional(),
   neutered: z.boolean().default(false),
+}).transform((data) => {
+  const { avatarUrl, ...pet } = data;
+  return {
+    ...pet,
+    photo: pet.photo || avatarUrl || '',
+  };
 });
 
 // Routes

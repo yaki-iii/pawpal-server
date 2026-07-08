@@ -267,7 +267,7 @@ describe('ChatService', () => {
 
       const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
       expect(assistantCall.summary).toContain('已收到 1 张图片');
-      expect(assistantCall.summary).toContain('当前模型暂不能直接识别图片内容');
+      expect(assistantCall.summary).toContain('图片识别服务暂时不可用');
       expect(assistantCall.summary).toContain('请补充文字描述');
     });
 
@@ -357,7 +357,7 @@ describe('ChatService', () => {
       expect(llmClient.chat).not.toHaveBeenCalled();
       const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
       expect(assistantCall.summary).toContain('我已经查看图片');
-      expect(assistantCall.summary).not.toContain('当前 AI 暂不能直接识别图片细节');
+      expect(assistantCall.summary).not.toContain('图片识别服务暂时不可用');
     });
 
     it('should fall back with a clear limitation notice when Ark vision fails', async () => {
@@ -378,7 +378,7 @@ describe('ChatService', () => {
 
       const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
       expect(assistantCall.summary).toContain('AI 服务暂时不可用');
-      expect(assistantCall.summary).toContain('当前模型暂不能直接识别图片内容');
+      expect(assistantCall.summary).toContain('图片识别服务暂时不可用');
     });
 
     it('should always include a clear image limitation notice when images are attached', async () => {
@@ -397,7 +397,7 @@ describe('ChatService', () => {
       });
 
       const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
-      expect(assistantCall.summary).toContain('当前 AI 暂不能直接识别图片细节');
+      expect(assistantCall.summary).toContain('图片识别服务暂时不可用');
       expect(assistantCall.summary).toContain('请补充文字描述');
     });
 

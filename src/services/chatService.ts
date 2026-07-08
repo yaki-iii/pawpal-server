@@ -312,7 +312,7 @@ export class ChatService {
   static buildFallbackReply(userMessage: string, imageCount: number = 0): string {
     const imageFallback =
       imageCount > 0
-        ? `\n\n已收到 ${imageCount} 张图片。当前模型暂不能直接识别图片内容，请补充文字描述：部位、颜色/形态变化、持续时间、精神食欲、是否疼痛或出血。`
+        ? `\n\n已收到 ${imageCount} 张图片，但图片识别服务暂时不可用。请补充文字描述：部位、颜色/形态变化、持续时间、精神食欲、是否疼痛或出血。`
         : '';
 
     return (
@@ -326,14 +326,14 @@ export class ChatService {
   }
 
   private static ensureImageLimitationNotice(reply: string, imageCount: number): string {
-    if (imageCount === 0 || reply.includes('不能直接识别图片')) {
+    if (imageCount === 0 || reply.includes('图片识别服务暂时不可用')) {
       return reply;
     }
 
     return [
       reply,
       '',
-      `已收到 ${imageCount} 张图片。当前 AI 暂不能直接识别图片细节，请补充文字描述：部位、颜色/形态变化、持续时间、精神食欲、是否疼痛或出血。`,
+      `已收到 ${imageCount} 张图片，但图片识别服务暂时不可用。请补充文字描述：部位、颜色/形态变化、持续时间、精神食欲、是否疼痛或出血。`,
     ].join('\n');
   }
 
@@ -358,7 +358,7 @@ export class ChatService {
     return [
       message,
       '',
-      `用户上传了 ${imageUrls.length} 张图片，请结合这些图片 URL 进行初步观察；如果当前模型不能直接识别图片，请明确说明需要用户补充文字描述。`,
+      `用户上传了 ${imageUrls.length} 张图片，请结合这些图片 URL 进行初步观察；如果图片 URL 无法访问，请明确说明需要用户补充文字描述。`,
       ...imageUrls.map((url, index) => `图片 ${index + 1}: ${url}`),
     ].join('\n');
   }
