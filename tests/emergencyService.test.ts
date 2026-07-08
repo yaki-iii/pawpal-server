@@ -274,6 +274,37 @@ describe('EmergencyHelpService', () => {
       expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('city=%E4%BD%9B%E5%B1%B1'));
     });
 
+    it('should geocode a manual address without requiring city', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          status: '1',
+          geocodes: [
+            {
+              formatted_address: '广东省广州市天河区正佳广场',
+              province: '广东省',
+              city: '广州市',
+              district: '天河区',
+              location: '113.327900,23.132800',
+            },
+          ],
+        }),
+      });
+
+      const result = await EmergencyHelpService.geocodeManualLocation('', '正佳广场');
+
+      expect(result).toEqual({
+        latitude: 23.1328,
+        longitude: 113.3279,
+        displayName: '广东省广州市天河区正佳广场',
+        city: '广州市',
+        district: '天河区',
+      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('address=%E6%AD%A3%E4%BD%B3%E5%B9%BF%E5%9C%BA'),
+      );
+    });
+
     it('should throw when manual location cannot be geocoded', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,

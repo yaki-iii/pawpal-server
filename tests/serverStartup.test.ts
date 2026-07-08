@@ -67,10 +67,10 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current AI image and avatar fix build id', async () => {
+  it('exposes the current AI, SOS, and composer fix build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v04-ai-image-avatar-fix-20260708');
+    expect(BUILD_ID).toBe('pawpal-v04-ai-sos-composer-fix-20260708');
   });
 });

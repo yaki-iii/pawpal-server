@@ -239,20 +239,21 @@ export class EmergencyHelpService {
   static async geocodeManualLocation(city: string, address: string): Promise<ManualLocationDTO> {
     const cleanCity = city.trim();
     const cleanAddress = address.trim();
-    if (!cleanCity || !cleanAddress) {
-      throw new Error('请填写城市和具体位置');
+    if (!cleanAddress) {
+      throw new Error('请输入要搜索的位置、商圈、小区或街道');
     }
     if (!config.amap.webServiceKey) {
       throw new Error('位置搜索服务暂不可用');
     }
 
     try {
+      const cityAddress = cleanCity ? `${cleanCity}${cleanAddress}` : cleanAddress;
       const geocode = await EmergencyHelpService.fetchAMapGeocode(cleanCity, cleanAddress)
-        || await EmergencyHelpService.fetchAMapGeocode(cleanCity, `${cleanCity}${cleanAddress}`);
+        || await EmergencyHelpService.fetchAMapGeocode(cleanCity, cityAddress);
       const place = geocode
         ? null
         : await EmergencyHelpService.searchAMapPlaceText(cleanCity, cleanAddress)
-          || await EmergencyHelpService.searchAMapPlaceText(cleanCity, `${cleanCity}${cleanAddress}`);
+          || await EmergencyHelpService.searchAMapPlaceText(cleanCity, cityAddress);
       const locationText = geocode?.location || place?.location;
       const [longitude, latitude] = EmergencyHelpService.parseAMapLocation(locationText);
       if ((!geocode && !place) || latitude == null || longitude == null) {
@@ -262,7 +263,7 @@ export class EmergencyHelpService {
       return {
         latitude,
         longitude,
-        displayName: geocode?.formatted_address || place?.name || `${cleanCity}${cleanAddress}`,
+        displayName: geocode?.formatted_address || place?.name || cityAddress,
         city: EmergencyHelpService.firstAMapText(geocode?.city) || EmergencyHelpService.firstAMapText(place?.cityname) || cleanCity,
         district: EmergencyHelpService.firstAMapText(geocode?.district) || EmergencyHelpService.firstAMapText(place?.adname),
       };

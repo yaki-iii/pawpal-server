@@ -378,21 +378,18 @@ export class ChatService {
         : 'low';
 
     const visualFindings = imageUrls.length > 0
-      ? [`已收到 ${imageUrls.length} 张图片`, '请结合文字描述判断部位、颜色、形态和变化速度']
-      : ['暂无图片输入，建议补充清晰照片帮助观察'];
+      ? [`已收到 ${imageUrls.length} 张图片`]
+      : ['根据文字描述生成初步观察'];
 
     const possibleCauses = ChatService.possibleCausesFor(text);
     const shouldSeeVet = severity !== 'low';
+    const suggestions = ChatService.extractSuggestions(assistantReply);
 
     return {
       severity,
       visualFindings,
       possibleCauses,
-      suggestions: [
-        '记录图片变化，观察 24 小时内是否加重',
-        '补充精神、食欲、饮水、排便和疼痛反应等信息',
-        '避免自行用药或使用人用药剂量',
-      ],
+      suggestions,
       shouldSeeVet,
       vetReminder: shouldSeeVet
         ? '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系动物医院。'
@@ -411,6 +408,30 @@ export class ChatService {
       return ['饮食变化或消化不适', '胃肠道感染风险', '误食异物或应激反应'];
     }
     return ['症状信息仍不完整', '环境或饮食变化', '需要结合持续时间和精神食欲判断'];
+  }
+
+  private static extractSuggestions(reply: string): string[] {
+    const cleaned = ChatService.normalizeAssistantReply(reply)
+      .replace(/\*\*/g, '')
+      .replace(/#{1,6}\s*/g, '')
+      .split(/\n|。|；|;/)
+      .map((line) => line.replace(/^[-•\d.、\s]+/, '').trim())
+      .filter((line) => line.length >= 6)
+      .filter((line) => !line.includes('仅供参考') && !line.includes('不替代'));
+
+    const priority = cleaned.filter((line) => (
+      line.includes('建议')
+      || line.includes('观察')
+      || line.includes('补充')
+      || line.includes('避免')
+      || line.includes('联系')
+      || line.includes('就医')
+    ));
+    const picked = (priority.length > 0 ? priority : cleaned).slice(0, 3);
+
+    return picked.length > 0
+      ? picked
+      : ['继续观察精神、食欲、饮水和排便变化', '记录症状持续时间和变化速度', '避免自行用药，必要时联系动物医院'];
   }
 
   private static conversationTitle(question: string): string {

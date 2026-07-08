@@ -74,8 +74,8 @@ export class EmergencyController {
       const city = String(req.query.city || '').trim();
       const address = String(req.query.address || '').trim();
 
-      if (!city || !address) {
-        sendError(res, 400, '请填写城市和具体位置');
+      if (!address) {
+        sendError(res, 400, '请输入要搜索的位置、商圈、小区或街道');
         return;
       }
 

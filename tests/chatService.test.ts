@@ -426,7 +426,11 @@ describe('ChatService', () => {
             severity: 'medium',
             visualFindings: expect.arrayContaining(['已收到 1 张图片']),
             possibleCauses: expect.arrayContaining(['眼部刺激或炎症']),
-            suggestions: expect.arrayContaining(['记录图片变化，观察 24 小时内是否加重']),
+            suggestions: [
+              '从照片和描述看，眼部分泌物需要继续观察',
+              '观察精神食欲',
+              '如果红肿加重请就医',
+            ],
             shouldSeeVet: true,
             vetReminder: '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系动物医院。',
           },
