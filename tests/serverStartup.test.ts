@@ -74,11 +74,11 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current AI, SOS, and composer fix build id', async () => {
+  it('exposes the current 0709 feedback fix build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v04-render-pet-schema-fix-20260709');
+    expect(BUILD_ID).toBe('pawpal-v04-0709-feedback-fix-20260709');
   });
 });
 

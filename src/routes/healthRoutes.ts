@@ -13,9 +13,23 @@ const healthRecordSchema = z.object({
   images: z.array(z.string()).default([]),
 });
 
-const weightRecordSchema = z.object({
+export const weightRecordSchema = z.object({
   weight: z.number().min(0, '体重不能为负').max(200, '体重数值过大'),
   date: z.string().min(1, '请选择日期'),
+  note: z.string().max(500, '备注最多500字').optional(),
+}).or(z.object({
+  weightKg: z.number().min(0, '体重不能为负').max(200, '体重数值过大'),
+  measuredAt: z.string().min(1, '请选择日期'),
+  note: z.string().max(500, '备注最多500字').optional(),
+})).transform((data) => {
+  if ('weightKg' in data) {
+    return {
+      weight: data.weightKg,
+      date: data.measuredAt,
+      note: data.note,
+    };
+  }
+  return data;
 });
 
 const reminderUpdateSchema = z.object({
