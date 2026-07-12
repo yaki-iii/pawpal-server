@@ -368,22 +368,21 @@ export class ChatService {
     assistantReply: string,
     imageUrls: string[] = [],
   ): AIResultCardDTO | undefined {
-    const text = `${userMessage}\n${assistantReply}`.toLowerCase();
-    const emergencyKeywords = ['呼吸困难', '大量出血', '抽搐', '中毒', '昏迷', '不能站立'];
-    const mediumKeywords = ['呕吐', '腹泻', '红', '肿', '分泌物', '皮肤', '眼', '耳', '疼', '不吃'];
-    const severity: AIResultCardDTO['severity'] = emergencyKeywords.some((keyword) => text.includes(keyword))
+    const replyText = ChatService.normalizeAssistantReply(assistantReply);
+    const lowerReply = replyText.toLowerCase();
+    const emergencyKeywords = ['呼吸困难', '大量出血', '抽搐', '中毒', '昏迷', '不能站立', '急诊'];
+    const mediumKeywords = ['建议', '观察', '异常', '持续', '联系', '医院', '兽医', '就医'];
+    const severity: AIResultCardDTO['severity'] = emergencyKeywords.some((keyword) => lowerReply.includes(keyword))
       ? 'high'
-      : imageUrls.length > 0 || mediumKeywords.some((keyword) => text.includes(keyword))
+      : mediumKeywords.some((keyword) => lowerReply.includes(keyword))
         ? 'medium'
         : 'low';
 
-    const visualFindings = imageUrls.length > 0
-      ? [`已收到 ${imageUrls.length} 张图片`]
-      : ['根据文字描述生成初步观察'];
-
-    const possibleCauses = ChatService.possibleCausesFor(text);
-    const shouldSeeVet = severity !== 'low';
-    const suggestions = ChatService.extractSuggestions(assistantReply);
+    const visualFindings = ChatService.extractLines(replyText, ['图片', '照片', '看到', '显示', '观察']).slice(0, 3);
+    const possibleCauses = ChatService.extractLines(replyText, ['可能', '原因', '考虑', '导致']).slice(0, 3);
+    const suggestions = ChatService.extractSuggestions(replyText);
+    const vetReminder = ChatService.extractLines(replyText, ['就医', '医院', '兽医', '急诊', '医生'])[0] ?? '';
+    const shouldSeeVet = Boolean(vetReminder);
 
     return {
       severity,
@@ -391,23 +390,8 @@ export class ChatService {
       possibleCauses,
       suggestions,
       shouldSeeVet,
-      vetReminder: shouldSeeVet
-        ? '如果出现持续红肿、脓性分泌物、明显疼痛或精神食欲下降，请尽快联系动物医院。'
-        : '如症状持续超过 24-48 小时或出现精神食欲下降，请咨询动物医院。',
+      vetReminder,
     };
-  }
-
-  private static possibleCausesFor(text: string): string[] {
-    if (text.includes('眼') || text.includes('红') || text.includes('分泌物')) {
-      return ['眼部刺激或炎症', '异物摩擦', '过敏或感染风险'];
-    }
-    if (text.includes('皮肤') || text.includes('痒') || text.includes('掉毛')) {
-      return ['皮肤刺激或过敏', '寄生虫或真菌风险', '舔咬导致局部加重'];
-    }
-    if (text.includes('呕吐') || text.includes('腹泻') || text.includes('不吃')) {
-      return ['饮食变化或消化不适', '胃肠道感染风险', '误食异物或应激反应'];
-    }
-    return ['症状信息仍不完整', '环境或饮食变化', '需要结合持续时间和精神食欲判断'];
   }
 
   private static extractSuggestions(reply: string): string[] {
@@ -429,9 +413,17 @@ export class ChatService {
     ));
     const picked = (priority.length > 0 ? priority : cleaned).slice(0, 3);
 
-    return picked.length > 0
-      ? picked
-      : ['继续观察精神、食欲、饮水和排便变化', '记录症状持续时间和变化速度', '避免自行用药，必要时联系动物医院'];
+    return picked;
+  }
+
+  private static extractLines(reply: string, keywords: string[]): string[] {
+    return ChatService.normalizeAssistantReply(reply)
+      .replace(/\*\*/g, '')
+      .replace(/#{1,6}\s*/g, '')
+      .split(/\n|。|；|;/)
+      .map((line) => line.replace(/^[-•\d.、\s]+/, '').trim())
+      .filter((line) => line.length >= 4)
+      .filter((line) => keywords.some((keyword) => line.includes(keyword)));
   }
 
   private static conversationTitle(question: string): string {
