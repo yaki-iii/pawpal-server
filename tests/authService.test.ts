@@ -7,6 +7,7 @@ jest.mock('../src/config/database', () => ({
     user: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
   },
 }));
@@ -67,6 +68,47 @@ describe('AuthService', () => {
       const hash = await AuthService.hashPassword('correctpass');
       const isValid = await AuthService.verifyPassword('wrongpass', hash);
       expect(isValid).toBe(false);
+    });
+  });
+
+  describe('changePassword', () => {
+    it('should verify the current password before storing a new hash', async () => {
+      const currentHash = await AuthService.hashPassword('old-password');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'user-1', passwordHash: currentHash, deletedAt: null,
+      });
+      (prisma.user.update as jest.Mock).mockResolvedValue({ id: 'user-1' });
+
+      await AuthService.changePassword('user-1', 'old-password', 'new-password');
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { passwordHash: expect.any(String) },
+      });
+      const storedHash = (prisma.user.update as jest.Mock).mock.calls[0][0].data.passwordHash;
+      await expect(AuthService.verifyPassword('new-password', storedHash)).resolves.toBe(true);
+    });
+
+    it('should reject an incorrect current password', async () => {
+      const currentHash = await AuthService.hashPassword('old-password');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'user-1', passwordHash: currentHash, deletedAt: null,
+      });
+
+      await expect(AuthService.changePassword('user-1', 'wrong-password', 'new-password'))
+        .rejects.toThrow('当前密码错误');
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should reject reusing the current password', async () => {
+      const currentHash = await AuthService.hashPassword('same-password');
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: 'user-1', passwordHash: currentHash, deletedAt: null,
+      });
+
+      await expect(AuthService.changePassword('user-1', 'same-password', 'same-password'))
+        .rejects.toThrow('新密码不能与当前密码相同');
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 

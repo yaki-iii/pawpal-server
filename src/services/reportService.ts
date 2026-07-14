@@ -11,6 +11,15 @@ export interface CreateReportInput {
 }
 
 export class ReportService {
+  static async listByReporter(reporterId: string): Promise<Record<string, unknown>[]> {
+    const reports = await prisma.contentReport.findMany({
+      where: { reporterId },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
+    return reports.map(ReportService.toDTO);
+  }
+
   static async createReport(reporterId: string, input: CreateReportInput): Promise<Record<string, unknown>> {
     const targetOwnerId = await ReportService.findTargetOwnerId(input.targetType, input.targetId);
     if (targetOwnerId && targetOwnerId === reporterId) {

@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { CommunityService } from '../services/communityService';
+import { ProfileContentService } from '../services/profileContentService';
 import { FeedService } from '../services/feedService';
 import { sendSuccess, sendError } from '../middleware/error';
 
@@ -7,6 +8,27 @@ import { sendSuccess, sendError } from '../middleware/error';
  * CommunityController — handles feed, posts, circles, comments, likes, follows.
  */
 export class CommunityController {
+  static async updatePrivacy(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) { sendError(res, 401, '未授权'); return; }
+      const result = await CommunityService.updatePostPrivacy(
+        req.params.id,
+        req.userId,
+        req.body.visibility,
+        req.body.allowComments,
+      );
+      sendSuccess(res, result, '动态隐私已更新');
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '动态隐私更新失败');
+    }
+  }
+
+  static async toggleBookmark(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) { sendError(res, 401, '未授权'); return; }
+      sendSuccess(res, await ProfileContentService.togglePostBookmark(req.userId, req.params.id));
+    } catch (error) { sendError(res, 400, (error as Error).message || '收藏失败'); }
+  }
   // ---- Feed ----
 
   /**

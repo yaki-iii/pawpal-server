@@ -461,6 +461,12 @@ describe('MomentService', () => {
   });
 
   describe('comments', () => {
+    it('should reject comments when the author disabled them', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue({ ...mockMoment, allowComments: false });
+      await expect(MomentService.createComment('moment-1', 'user-2', '测试评论'))
+        .rejects.toThrow('作者已关闭评论');
+      expect(prisma.momentComment.create).not.toHaveBeenCalled();
+    });
     it('should list comments for a moment with author info', async () => {
       (prisma.momentComment.findMany as jest.Mock).mockResolvedValue([
         {
@@ -598,6 +604,16 @@ describe('MomentService', () => {
       await expect(
         MomentService.createComment('missing-moment', 'user-1', '好可爱'),
       ).rejects.toThrow('碎片不存在');
+    });
+  });
+
+  describe('updatePrivacy', () => {
+    it('should persist visibility and comment permission for the owner', async () => {
+      (prisma.moment.findUnique as jest.Mock).mockResolvedValue(mockMoment);
+      (prisma.moment.update as jest.Mock).mockResolvedValue({ ...mockMoment, visibility: 'PRIVATE', allowComments: false });
+
+      await expect(MomentService.updatePrivacy('moment-1', 'user-1', 'PRIVATE', false))
+        .resolves.toEqual({ visibility: 'PRIVATE', allowComments: false });
     });
   });
 

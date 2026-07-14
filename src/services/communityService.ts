@@ -138,6 +138,22 @@ export class CommunityService {
     logger.info(`Post deleted: ${postId}`);
   }
 
+  static async updatePostPrivacy(
+    postId: string,
+    userId: string,
+    visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE',
+    allowComments: boolean,
+  ): Promise<{ visibility: string; allowComments: boolean }> {
+    const post = await prisma.post.findUnique({ where: { id: postId } });
+    if (!post || post.isRemoved) throw new Error('动态不存在');
+    if (post.userId !== userId) throw new Error('无权修改该动态');
+    const updated = await prisma.post.update({
+      where: { id: postId },
+      data: { visibility, allowComments },
+    });
+    return { visibility: updated.visibility, allowComments: updated.allowComments };
+  }
+
   /**
    * Toggle like on a post.
    * Creates notification for the post author.
@@ -215,6 +231,9 @@ export class CommunityService {
     const post = await prisma.post.findUnique({ where: { id: postId } });
     if (!post) {
       throw new Error('动态不存在');
+    }
+    if (post.allowComments === false) {
+      throw new Error('作者已关闭评论');
     }
 
     if (parentId) {
@@ -599,6 +618,8 @@ export class CommunityService {
       tags: post.tags,
       likeCount: post.likeCount,
       commentCount: post.commentCount,
+      visibility: (post as { visibility?: string }).visibility ?? 'PUBLIC',
+      allowComments: (post as { allowComments?: boolean }).allowComments ?? true,
       createdAt: post.createdAt.toISOString(),
       updatedAt: post.updatedAt.toISOString(),
       isLiked: (post as { isLiked?: boolean }).isLiked,

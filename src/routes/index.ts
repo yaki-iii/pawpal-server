@@ -12,6 +12,7 @@ import uploadRoutes from './uploadRoutes';
 import searchRoutes from './searchRoutes';
 import adminRoutes from './adminRoutes';
 import reportRoutes from './reportRoutes';
+import feedbackRoutes from './feedbackRoutes';
 import { generalRateLimiter } from '../middleware/rateLimit';
 
 const router = Router();
@@ -33,6 +34,7 @@ router.use('/feed', momentFeedRoutes); // /feed/moments
 router.use('/uploads', uploadRoutes); // /uploads/images
 router.use('/search', searchRoutes); // /search?q=...
 router.use('/reports', reportRoutes); // /reports
+router.use('/feedback', feedbackRoutes);
 router.use('/ai', aiRoutes);
 router.use('/reminders', reminderRoutes); // /reminders, /reminders/:id, etc.
 router.use('/emergency', emergencyRoutes); // /emergency/help, /emergency/vets, etc.

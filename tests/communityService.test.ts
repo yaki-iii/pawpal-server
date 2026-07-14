@@ -305,6 +305,29 @@ describe('CommunityService', () => {
     });
   });
 
+  describe('updatePostPrivacy', () => {
+    it('should persist visibility and comment permission for the author', async () => {
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
+      (prisma.post.update as jest.Mock).mockResolvedValue({
+        ...mockPost, visibility: 'PRIVATE', allowComments: false,
+      });
+
+      const result = await CommunityService.updatePostPrivacy('post-1', 'user-1', 'PRIVATE', false);
+
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'post-1' },
+        data: { visibility: 'PRIVATE', allowComments: false },
+      });
+      expect(result).toEqual({ visibility: 'PRIVATE', allowComments: false });
+    });
+
+    it('should reject privacy changes from another user', async () => {
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
+      await expect(CommunityService.updatePostPrivacy('post-1', 'user-2', 'PRIVATE', false))
+        .rejects.toThrow('无权修改该动态');
+    });
+  });
+
   describe('toggleLike', () => {
     it('should like a post (create like + increment count)', async () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
@@ -361,6 +384,13 @@ describe('CommunityService', () => {
   });
 
   describe('createComment', () => {
+    it('should reject comments when the author disabled them', async () => {
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ ...mockPost, allowComments: false });
+      await expect(CommunityService.createComment('post-1', 'user-2', '测试评论'))
+        .rejects.toThrow('作者已关闭评论');
+      expect(prisma.comment.create).not.toHaveBeenCalled();
+    });
+
     it('should create a comment and increment commentCount', async () => {
       (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
       (prisma.comment.create as jest.Mock).mockResolvedValue({

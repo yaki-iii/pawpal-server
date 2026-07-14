@@ -100,6 +100,8 @@ export interface PostDTO {
   tags: string[];
   likeCount: number;
   commentCount: number;
+  visibility: string;
+  allowComments: boolean;
   createdAt: string;
   updatedAt: string;
   author?: UserDTO;
@@ -200,6 +202,7 @@ export interface MomentDTO {
   mood: string;
   location: string;
   visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE';
+  allowComments: boolean;
   likeCount: number;
   commentCount: number;
   shareCount: number;

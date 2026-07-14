@@ -13,6 +13,7 @@ const createReportSchema = z.object({
   note: z.string().max(500, '补充说明最多500字').optional(),
 });
 
+router.get('/', requireAuth, ReportController.listMyReports);
 router.post('/', requireAuth, validateBody(createReportSchema), ReportController.createReport);
 
 export default router;

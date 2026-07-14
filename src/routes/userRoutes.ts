@@ -19,10 +19,22 @@ const updateProfileSchema = z.object({
   searchable: z.boolean().optional(),
 });
 
+const updateEmailSchema = z.object({
+  email: z.string().email('邮箱格式不正确'),
+  password: z.string().min(6, '请输入当前密码'),
+});
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(6, '请输入当前密码'),
+  newPassword: z.string().min(8, '新密码至少8位').max(50, '新密码最多50位'),
+});
+
 // ---- Specific routes (must come BEFORE parameterized /:userId routes) ----
 
 // Profile update — auth required
 router.put('/', requireAuth, validateBody(updateProfileSchema), UserController.updateProfile);
+router.patch('/email', requireAuth, validateBody(updateEmailSchema), UserController.updateEmail);
+router.patch('/password', requireAuth, validateBody(changePasswordSchema), UserController.changePassword);
 
 // Account deletion — auth required
 router.delete('/', requireAuth, UserController.deleteAccount);

@@ -7,11 +7,50 @@ import { PetService } from '../services/petService';
 import { prisma } from '../config/database';
 import { sendSuccess, sendError } from '../middleware/error';
 import { logger } from '../utils/logger';
+import { AuthService } from '../services/authService';
 
 /**
  * UserController — handles user profile, follow, notifications, data privacy.
  */
 export class UserController {
+  static async changePassword(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) { sendError(res, 401, '未授权'); return; }
+      await AuthService.changePassword(req.userId, req.body.currentPassword, req.body.newPassword);
+      sendSuccess(res, null, '密码已更新');
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '密码更新失败');
+    }
+  }
+
+  static async updateEmail(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) {
+        sendError(res, 401, '未授权');
+        return;
+      }
+      const email = String(req.body.email).trim().toLowerCase();
+      const user = await prisma.user.findUnique({ where: { id: req.userId } });
+      if (!user || user.deletedAt) {
+        sendError(res, 404, '用户不存在');
+        return;
+      }
+      if (!(await AuthService.verifyPassword(String(req.body.password), user.passwordHash))) {
+        sendError(res, 400, '当前密码错误');
+        return;
+      }
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing && existing.id !== user.id) {
+        sendError(res, 409, '该邮箱已被使用');
+        return;
+      }
+      const updated = await prisma.user.update({ where: { id: user.id }, data: { email } });
+      sendSuccess(res, { email: updated.email }, '邮箱已更新');
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '邮箱更新失败');
+    }
+  }
+
   /**
    * GET /users/:userId — get user profile
    */

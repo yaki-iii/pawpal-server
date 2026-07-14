@@ -201,6 +201,25 @@ export class MomentService {
     logger.info(`Moment deleted: ${momentId}`);
   }
 
+  static async updatePrivacy(
+    momentId: string,
+    userId: string,
+    visibility: MomentVisibility,
+    allowComments: boolean,
+  ): Promise<{ visibility: MomentVisibility; allowComments: boolean }> {
+    const moment = await prisma.moment.findUnique({ where: { id: momentId } });
+    if (!moment || moment.isRemoved) throw new Error('碎片不存在');
+    if (moment.userId !== userId) throw new Error('无权修改该碎片');
+    const updated = await prisma.moment.update({
+      where: { id: momentId },
+      data: { visibility, allowComments },
+    });
+    return {
+      visibility: MomentService.normalizedVisibility(updated.visibility),
+      allowComments: updated.allowComments,
+    };
+  }
+
   /**
    * Promote a lightweight moment into a formal growth diary entry.
    */
@@ -256,6 +275,7 @@ export class MomentService {
   ): Promise<MomentCommentDTO> {
     const moment = await prisma.moment.findUnique({ where: { id: momentId } });
     if (!moment || (moment as { isRemoved?: boolean }).isRemoved) throw new Error('碎片不存在');
+    if (moment.allowComments === false) throw new Error('作者已关闭评论');
 
     if (parentId) {
       const parent = await prisma.momentComment.findUnique({ where: { id: parentId } });
@@ -361,6 +381,7 @@ export class MomentService {
       mood: moment.mood,
       location: moment.location,
       visibility: MomentService.normalizedVisibility((moment as { visibility?: string }).visibility),
+      allowComments: (moment as { allowComments?: boolean }).allowComments ?? true,
       likeCount: moment.likeCount,
       commentCount: (moment as { commentCount?: number }).commentCount || 0,
       shareCount: (moment as { shareCount?: number }).shareCount || 0,

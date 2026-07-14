@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { MomentService } from '../services/momentService';
 import { sendSuccess, sendError } from '../middleware/error';
 import { UploadController } from './uploadController';
+import { ProfileContentService } from '../services/profileContentService';
 
 /**
  * MomentController — handles daily moment (日常碎片) CRUD.
@@ -17,6 +18,25 @@ import { UploadController } from './uploadController';
  *  - POST /moments/:id/comments
  */
 export class MomentController {
+  static async updatePrivacy(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) { sendError(res, 401, '未授权'); return; }
+      const result = await MomentService.updatePrivacy(
+        req.params.id,
+        req.userId,
+        req.body.visibility,
+        req.body.allowComments,
+      );
+      sendSuccess(res, result, '日常隐私已更新');
+    } catch (error) { sendError(res, 400, (error as Error).message || '日常隐私更新失败'); }
+  }
+
+  static async toggleBookmark(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) { sendError(res, 401, '未授权'); return; }
+      sendSuccess(res, await ProfileContentService.toggleMomentBookmark(req.userId, req.params.id));
+    } catch (error) { sendError(res, 400, (error as Error).message || '收藏失败'); }
+  }
   /**
    * POST /pets/:petId/moments
    */

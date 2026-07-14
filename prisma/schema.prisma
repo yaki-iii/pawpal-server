@@ -164,6 +164,8 @@ model User {
   posts               Post[]
   comments            Comment[]
   likes               Like[]
+  postBookmarks       PostBookmark[]
+  momentBookmarks     MomentBookmark[]
   followings          Follow[]        @relation("Follower")
   followers           Follow[]        @relation("Followee")
   circleMembers       CircleMember[]
@@ -185,8 +187,25 @@ model User {
   searchLogs          SearchLog[]
   sosSearchLogs       SOSSearchLog[]
   aiCallLogs          AICallLog[]
+  feedbacks           UserFeedback[]
 
   @@map("users")
+}
+
+model UserFeedback {
+  id             String   @id @default(cuid())
+  userId         String
+  category       String
+  description    String
+  contact        String   @default("")
+  screenshotUrls String[] @default([])
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("user_feedback")
 }
 
 model Pet {
@@ -290,6 +309,8 @@ model Post {
   tags         String[]
   likeCount    Int      @default(0)
   commentCount Int      @default(0)
+  visibility   String   @default("PUBLIC")
+  allowComments Boolean @default(true)
   isPinned     Boolean  @default(false)
   isRemoved    Boolean  @default(false)
   createdAt    DateTime @default(now())
@@ -300,6 +321,7 @@ model Post {
   pet      Pet?      @relation(fields: [petId], references: [id], onDelete: SetNull)
   comments Comment[]
   likes    Like[]
+  bookmarks PostBookmark[]
   removals PostRemoval[]
 
   @@index([userId])
@@ -338,6 +360,17 @@ model Like {
 
   @@unique([userId, postId])
   @@map("likes")
+}
+
+model PostBookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  @@unique([userId, postId])
+  @@map("post_bookmarks")
 }
 
 model Circle {
@@ -543,6 +576,7 @@ model Moment {
   mood      String   @default("")
   location  String   @default("")
   visibility String  @default("PUBLIC")
+  allowComments Boolean @default(true)
   isRemoved Boolean  @default(false)
   likeCount Int      @default(0)
   commentCount Int    @default(0)
@@ -553,6 +587,7 @@ model Moment {
   user User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   pet  Pet    @relation(fields: [petId], references: [id], onDelete: Cascade)
   likes MomentLike[]
+  bookmarks MomentBookmark[]
   comments MomentComment[]
 
   @@index([userId])
@@ -572,6 +607,17 @@ model MomentLike {
 
   @@unique([userId, momentId])
   @@map("moment_likes")
+}
+
+model MomentBookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  momentId  String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moment Moment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+  @@unique([userId, momentId])
+  @@map("moment_bookmarks")
 }
 
 model MomentComment {

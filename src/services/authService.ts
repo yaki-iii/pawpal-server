@@ -26,6 +26,21 @@ export class AuthService {
     return bcrypt.compare(password, hash);
   }
 
+  static async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) throw new Error('用户不存在');
+    if (!(await AuthService.verifyPassword(currentPassword, user.passwordHash))) {
+      throw new Error('当前密码错误');
+    }
+    if (await AuthService.verifyPassword(newPassword, user.passwordHash)) {
+      throw new Error('新密码不能与当前密码相同');
+    }
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: await AuthService.hashPassword(newPassword) },
+    });
+  }
+
   /**
    * Sign a JWT token for a user.
    */

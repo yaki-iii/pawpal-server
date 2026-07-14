@@ -20,6 +20,11 @@ const commentSchema = z.object({
   parentId: z.string().optional(),
 });
 
+const postPrivacySchema = z.object({
+  visibility: z.enum(['PUBLIC', 'FOLLOWERS', 'PRIVATE']),
+  allowComments: z.boolean(),
+});
+
 const createCircleSchema = z.object({
   name: z.string().min(2, '圈子名称至少2个字').max(20, '圈子名称最多20个字'),
   description: z.string().max(200, '描述最多200字').default(''),
@@ -76,6 +81,8 @@ postRoutes.get('/:id', optionalAuth, CommunityController.getPostById);
 postRoutes.post('/', requireAuth, validateBody(postSchema), CommunityController.createPost);
 postRoutes.delete('/:id', requireAuth, CommunityController.deletePost);
 postRoutes.post('/:id/like', requireAuth, CommunityController.toggleLike);
+postRoutes.post('/:id/bookmark', requireAuth, CommunityController.toggleBookmark);
+postRoutes.patch('/:id/privacy', requireAuth, validateBody(postPrivacySchema), CommunityController.updatePrivacy);
 
 // Comments — list is public, create/delete require auth
 postRoutes.get('/:id/comments', CommunityController.listComments);

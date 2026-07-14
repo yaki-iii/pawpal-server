@@ -23,6 +23,29 @@ export interface FavoriteContentResultDTO {
 }
 
 export class ProfileContentService {
+  static async togglePostBookmark(userId: string, postId: string): Promise<{ bookmarked: boolean }> {
+    const post = await prisma.post.findFirst({ where: { id: postId, isRemoved: false }, select: { id: true } });
+    if (!post) throw new Error('帖子不存在');
+    const existing = await prisma.postBookmark.findUnique({ where: { userId_postId: { userId, postId } } });
+    if (existing) {
+      await prisma.postBookmark.delete({ where: { id: existing.id } });
+      return { bookmarked: false };
+    }
+    await prisma.postBookmark.create({ data: { userId, postId } });
+    return { bookmarked: true };
+  }
+
+  static async toggleMomentBookmark(userId: string, momentId: string): Promise<{ bookmarked: boolean }> {
+    const moment = await prisma.moment.findFirst({ where: { id: momentId, isRemoved: false }, select: { id: true } });
+    if (!moment) throw new Error('日常不存在');
+    const existing = await prisma.momentBookmark.findUnique({ where: { userId_momentId: { userId, momentId } } });
+    if (existing) {
+      await prisma.momentBookmark.delete({ where: { id: existing.id } });
+      return { bookmarked: false };
+    }
+    await prisma.momentBookmark.create({ data: { userId, momentId } });
+    return { bookmarked: true };
+  }
   static async listUserMoments(
     userId: string,
     limit: number = 20,
@@ -121,7 +144,7 @@ export class ProfileContentService {
     userId: string,
     limit: number,
   ): Promise<FavoriteContentItemDTO[]> {
-    const likes = await prisma.like.findMany({
+    const bookmarks = await prisma.postBookmark.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -132,16 +155,16 @@ export class ProfileContentService {
       },
     });
 
-    return likes.map((like) => {
-      const post = like.post;
-      const dto = CommunityService.toPostDTO({ ...post, isLiked: true });
+    return bookmarks.map((bookmark) => {
+      const post = bookmark.post;
+      const dto = CommunityService.toPostDTO(post);
       if (post.author) dto.author = AuthService.toDTO(post.author as never);
       if (post.pet) dto.pet = PetService.toDTO(post.pet as never);
       if (post.circle) dto.circle = CommunityService.toCircleDTO(post.circle as never);
       return {
         id: post.id,
         type: 'post',
-        savedAt: like.createdAt.toISOString(),
+        savedAt: bookmark.createdAt.toISOString(),
         title: post.title || '社区帖子',
         subtitle: post.content,
         imageUrls: post.images,
@@ -154,7 +177,7 @@ export class ProfileContentService {
     userId: string,
     limit: number,
   ): Promise<FavoriteContentItemDTO[]> {
-    const likes = await prisma.momentLike.findMany({
+    const bookmarks = await prisma.momentBookmark.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -165,16 +188,15 @@ export class ProfileContentService {
       },
     });
 
-    return likes.map((like) => {
-      const moment = like.moment;
+    return bookmarks.map((bookmark) => {
+      const moment = bookmark.moment;
       const dto = MomentService.toDTO(moment as never);
-      dto.isLiked = true;
       if (moment.user) dto.author = AuthService.toDTO(moment.user as never);
       if (moment.pet) dto.pet = PetService.toDTO(moment.pet as never);
       return {
         id: moment.id,
         type: 'moment',
-        savedAt: like.createdAt.toISOString(),
+        savedAt: bookmark.createdAt.toISOString(),
         title: moment.content.slice(0, 18) || '日常碎片',
         subtitle: moment.content,
         imageUrls: moment.images,

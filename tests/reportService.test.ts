@@ -22,6 +22,7 @@ jest.mock('../src/config/database', () => ({
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn(),
     },
   },
 }));
@@ -149,5 +150,23 @@ describe('ReportService', () => {
         reason: 'OTHER',
       }),
     ).rejects.toThrow('不能举报自己的内容');
+  });
+
+  it('lists only reports created by the current user', async () => {
+    (prisma.contentReport.findMany as jest.Mock).mockResolvedValue([{
+      id: 'report-1', reporterId: 'reporter-1', targetType: 'POST', targetId: 'post-1',
+      targetOwnerId: 'author-1', reason: 'SPAM', note: '', duplicateCount: 1,
+      status: 'REVIEWING', createdAt: new Date('2026-07-03T00:00:00Z'),
+      updatedAt: new Date('2026-07-03T01:00:00Z'), lastReportedAt: new Date('2026-07-03T00:00:00Z'),
+    }]);
+
+    const reports = await ReportService.listByReporter('reporter-1');
+
+    expect(reports).toHaveLength(1);
+    expect(prisma.contentReport.findMany).toHaveBeenCalledWith({
+      where: { reporterId: 'reporter-1' },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
   });
 });

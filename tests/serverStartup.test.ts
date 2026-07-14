@@ -74,11 +74,11 @@ describe('server startup', () => {
 });
 
 describe('app health metadata', () => {
-  it('exposes the current 0712 feedback fix build id', async () => {
+  it('exposes the current V06 completion build id', async () => {
     jest.resetModules();
     const { BUILD_ID } = await import('../src/buildInfo');
 
-    expect(BUILD_ID).toBe('pawpal-v04-0712-feedback-fix-20260712');
+    expect(BUILD_ID).toBe('pawpal-v06-0714-complete-20260714');
   });
 });
 

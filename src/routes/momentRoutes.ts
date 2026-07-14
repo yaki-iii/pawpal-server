@@ -47,11 +47,18 @@ petMomentRoutes.post(
 /** Mounted at /moments — single-moment operations. */
 export const momentRoutes = Router();
 
+const momentPrivacySchema = z.object({
+  visibility: z.enum(['PUBLIC', 'FOLLOWERS', 'PRIVATE']),
+  allowComments: z.boolean(),
+});
+
 // DELETE /moments/:id — auth required (owner only)
 momentRoutes.delete('/:id', requireAuth, MomentController.deleteMoment);
 
 // POST /moments/:id/like — auth required
 momentRoutes.post('/:id/like', requireAuth, MomentController.toggleLike);
+momentRoutes.post('/:id/bookmark', requireAuth, MomentController.toggleBookmark);
+momentRoutes.patch('/:id/privacy', requireAuth, validateBody(momentPrivacySchema), MomentController.updatePrivacy);
 
 // POST /moments/:id/share — records external share taps
 momentRoutes.post('/:id/share', optionalAuth, MomentController.recordShare);

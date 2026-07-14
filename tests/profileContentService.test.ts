@@ -3,8 +3,20 @@ import { prisma } from '../src/config/database';
 
 jest.mock('../src/config/database', () => ({
   prisma: {
-    moment: { findMany: jest.fn() },
-    momentLike: { findMany: jest.fn() },
+    post: { findFirst: jest.fn() },
+    moment: { findFirst: jest.fn(), findMany: jest.fn() },
+    postBookmark: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+    },
+    momentBookmark: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+    },
     like: { findMany: jest.fn() },
     follow: { findMany: jest.fn() },
   },
@@ -85,7 +97,7 @@ describe('ProfileContentService', () => {
     }));
   });
 
-  it('should list posts liked by the user as favorites MVP', async () => {
+  it('should list posts liked by the user independently from bookmarks', async () => {
     (prisma.like.findMany as jest.Mock).mockResolvedValue([
       {
         id: 'like-1',
@@ -123,8 +135,38 @@ describe('ProfileContentService', () => {
     }));
   });
 
+  it('should create and remove a post bookmark through the same toggle', async () => {
+    (prisma.post.findFirst as jest.Mock).mockResolvedValue({ id: 'post-1' });
+    (prisma.postBookmark.findUnique as jest.Mock)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'bookmark-1', userId: 'user-1', postId: 'post-1' });
+    (prisma.postBookmark.create as jest.Mock).mockResolvedValue({ id: 'bookmark-1' });
+    (prisma.postBookmark.delete as jest.Mock).mockResolvedValue({ id: 'bookmark-1' });
+
+    await expect(ProfileContentService.togglePostBookmark('user-1', 'post-1'))
+      .resolves.toEqual({ bookmarked: true });
+    await expect(ProfileContentService.togglePostBookmark('user-1', 'post-1'))
+      .resolves.toEqual({ bookmarked: false });
+
+    expect(prisma.postBookmark.create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', postId: 'post-1' },
+    });
+    expect(prisma.postBookmark.delete).toHaveBeenCalledWith({ where: { id: 'bookmark-1' } });
+    expect(prisma.like.findMany).not.toHaveBeenCalled();
+  });
+
+  it('should reject bookmarking missing content', async () => {
+    (prisma.post.findFirst as jest.Mock).mockResolvedValue(null);
+    (prisma.moment.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await expect(ProfileContentService.togglePostBookmark('user-1', 'missing-post'))
+      .rejects.toThrow('帖子不存在');
+    await expect(ProfileContentService.toggleMomentBookmark('user-1', 'missing-moment'))
+      .rejects.toThrow('日常不存在');
+  });
+
   it('should aggregate favorite posts and moments with type filters', async () => {
-    (prisma.like.findMany as jest.Mock).mockResolvedValue([
+    (prisma.postBookmark.findMany as jest.Mock).mockResolvedValue([
       {
         id: 'like-1',
         userId: 'user-1',
@@ -149,7 +191,7 @@ describe('ProfileContentService', () => {
         },
       },
     ]);
-    (prisma.momentLike.findMany as jest.Mock).mockResolvedValue([
+    (prisma.momentBookmark.findMany as jest.Mock).mockResolvedValue([
       {
         id: 'moment-like-1',
         userId: 'user-1',
@@ -186,5 +228,6 @@ describe('ProfileContentService', () => {
       expect.objectContaining({ id: 'moment-1', type: 'moment' }),
     ]);
     expect(knowledge.items).toEqual([]);
+    expect(prisma.like.findMany).not.toHaveBeenCalled();
   });
 });
