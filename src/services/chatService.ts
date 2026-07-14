@@ -165,30 +165,12 @@ export class ChatService {
           imageCount: imageUrls.length,
           errorMessage: (error as Error).message,
         });
-        logger.warn(`Chat: LLM call failed, using fallback: ${(error as Error).message}`);
-        assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
-        void AIMonitoringService.recordCall({
-          userId,
-          conversationId,
-          provider: 'FALLBACK',
-          operation: 'CHAT_FALLBACK_REPLY',
-          status: 'FALLBACK',
-          imageCount: imageUrls.length,
-          errorMessage: (error as Error).message,
-        });
+        logger.warn(`Chat: LLM call failed: ${(error as Error).message}`);
+        throw new Error('AI 服务暂时不可用，请稍后重试');
       }
     } else {
       if (!assistantReply) {
-        assistantReply = ChatService.buildFallbackReply(message, imageUrls.length);
-        void AIMonitoringService.recordCall({
-          userId,
-          conversationId,
-          provider: 'FALLBACK',
-          operation: 'CHAT_FALLBACK_REPLY',
-          status: 'FALLBACK',
-          imageCount: imageUrls.length,
-          errorMessage: 'LLM not configured',
-        });
+        throw new Error('AI 服务暂时不可用，请稍后重试');
       }
     }
     assistantReply = ChatService.normalizeAssistantReply(

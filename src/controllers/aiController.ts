@@ -51,7 +51,8 @@ export class AIController {
       });
       sendSuccess(res, reply, '回复成功', 201);
     } catch (error) {
-      sendError(res, 500, (error as Error).message || 'AI 对话失败');
+      const message = (error as Error).message || 'AI 对话失败';
+      sendError(res, message.includes('AI 服务暂时不可用') ? 503 : 500, message);
     }
   }
 

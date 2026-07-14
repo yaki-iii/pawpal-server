@@ -232,60 +232,48 @@ describe('ChatService', () => {
       });
     });
 
-    it('should use fallback reply when LLM is not configured', async () => {
-      (prisma.aIAssistantSession.create as jest.Mock)
-        .mockResolvedValueOnce(mockUserMessage)
-        .mockResolvedValueOnce(mockAssistantMessage);
+    it('should fail without saving a fabricated assistant reply when LLM is not configured', async () => {
+      (prisma.aIAssistantSession.create as jest.Mock).mockResolvedValueOnce(mockUserMessage);
       (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
       (llmClient.isConfigured as jest.Mock).mockReturnValue(false);
 
-      const result = await ChatService.chat({
+      await expect(ChatService.chat({
         userId: 'user-1',
         message: 'test',
-      });
+      })).rejects.toThrow('AI 服务暂时不可用');
 
-      // LLM should NOT be called
       expect(llmClient.chat).not.toHaveBeenCalled();
-      // Fallback reply should be stored
-      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
-      expect(assistantCall.summary).toContain('AI 服务暂时不可用');
+      expect(prisma.aIAssistantSession.create).toHaveBeenCalledTimes(1);
     });
 
-    it('should clearly explain image fallback when LLM is unavailable', async () => {
+    it('should fail explicitly when image and text models are unavailable', async () => {
       const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
-      (prisma.aIAssistantSession.create as jest.Mock)
-        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
-        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.create as jest.Mock).mockResolvedValueOnce({ ...mockUserMessage, imageUrls });
       (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
+      (arkVisionClient.isConfigured as jest.Mock).mockReturnValue(false);
       (llmClient.isConfigured as jest.Mock).mockReturnValue(false);
 
-      await ChatService.chat({
+      await expect(ChatService.chat({
         userId: 'user-1',
         message: '帮我看下眼睛照片',
         imageUrls,
-      });
+      })).rejects.toThrow('AI 服务暂时不可用');
 
-      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
-      expect(assistantCall.summary).toContain('已收到 1 张图片');
-      expect(assistantCall.summary).toContain('图片识别服务暂时不可用');
-      expect(assistantCall.summary).toContain('请补充文字描述');
+      expect(prisma.aIAssistantSession.create).toHaveBeenCalledTimes(1);
     });
 
-    it('should use fallback reply when LLM call fails', async () => {
-      (prisma.aIAssistantSession.create as jest.Mock)
-        .mockResolvedValueOnce(mockUserMessage)
-        .mockResolvedValueOnce(mockAssistantMessage);
+    it('should fail without saving a fabricated assistant reply when LLM call fails', async () => {
+      (prisma.aIAssistantSession.create as jest.Mock).mockResolvedValueOnce(mockUserMessage);
       (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
       (llmClient.isConfigured as jest.Mock).mockReturnValue(true);
       (llmClient.chat as jest.Mock).mockRejectedValue(new Error('API timeout'));
 
-      await ChatService.chat({
+      await expect(ChatService.chat({
         userId: 'user-1',
         message: 'test',
-      });
+      })).rejects.toThrow('AI 服务暂时不可用');
 
-      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
-      expect(assistantCall.summary).toContain('AI 服务暂时不可用');
+      expect(prisma.aIAssistantSession.create).toHaveBeenCalledTimes(1);
       expect(AIMonitoringService.recordCall).toHaveBeenCalledWith(expect.objectContaining({
         userId: 'user-1',
         provider: 'DEEPSEEK_TEXT',
@@ -293,13 +281,6 @@ describe('ChatService', () => {
         status: 'FAILED',
         imageCount: 0,
         errorMessage: 'API timeout',
-      }));
-      expect(AIMonitoringService.recordCall).toHaveBeenCalledWith(expect.objectContaining({
-        userId: 'user-1',
-        provider: 'FALLBACK',
-        operation: 'CHAT_FALLBACK_REPLY',
-        status: 'FALLBACK',
-        imageCount: 0,
       }));
     });
 
@@ -360,25 +341,21 @@ describe('ChatService', () => {
       expect(assistantCall.summary).not.toContain('图片识别服务暂时不可用');
     });
 
-    it('should fall back with a clear limitation notice when Ark vision fails', async () => {
+    it('should fail explicitly when Ark vision fails and text LLM is unavailable', async () => {
       const imageUrls = ['https://cdn.example.com/pet-eye.jpg'];
-      (prisma.aIAssistantSession.create as jest.Mock)
-        .mockResolvedValueOnce({ ...mockUserMessage, imageUrls })
-        .mockResolvedValueOnce({ ...mockAssistantMessage, imageUrls });
+      (prisma.aIAssistantSession.create as jest.Mock).mockResolvedValueOnce({ ...mockUserMessage, imageUrls });
       (prisma.aIAssistantSession.findMany as jest.Mock).mockResolvedValue([]);
       (arkVisionClient.isConfigured as jest.Mock).mockReturnValue(true);
       (arkVisionClient.analyzeImages as jest.Mock).mockRejectedValue(new Error('Ark timeout'));
       (llmClient.isConfigured as jest.Mock).mockReturnValue(false);
 
-      await ChatService.chat({
+      await expect(ChatService.chat({
         userId: 'user-1',
         message: '请看看眼睛照片',
         imageUrls,
-      });
+      })).rejects.toThrow('AI 服务暂时不可用');
 
-      const assistantCall = (prisma.aIAssistantSession.create as jest.Mock).mock.calls[1][0].data;
-      expect(assistantCall.summary).toContain('AI 服务暂时不可用');
-      expect(assistantCall.summary).toContain('图片识别服务暂时不可用');
+      expect(prisma.aIAssistantSession.create).toHaveBeenCalledTimes(1);
     });
 
     it('should always include a clear image limitation notice when images are attached', async () => {
