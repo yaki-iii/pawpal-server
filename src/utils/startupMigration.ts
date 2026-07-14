@@ -187,6 +187,64 @@ export async function runStartupMigrations(): Promise<void> {
       'ai_call_logs_userId_fkey',
       'ALTER TABLE "ai_call_logs" ADD CONSTRAINT "ai_call_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE',
     );
+    await prisma.$executeRawUnsafe('ALTER TABLE "posts" ADD COLUMN IF NOT EXISTS "visibility" TEXT NOT NULL DEFAULT \'PUBLIC\'');
+    await prisma.$executeRawUnsafe('ALTER TABLE "posts" ADD COLUMN IF NOT EXISTS "allowComments" BOOLEAN NOT NULL DEFAULT true');
+    await prisma.$executeRawUnsafe('ALTER TABLE "moments" ADD COLUMN IF NOT EXISTS "allowComments" BOOLEAN NOT NULL DEFAULT true');
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "post_bookmarks" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "postId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "post_bookmarks_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "post_bookmarks_userId_postId_key" ON "post_bookmarks"("userId", "postId")');
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "moment_bookmarks" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "momentId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "moment_bookmarks_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "moment_bookmarks_userId_momentId_key" ON "moment_bookmarks"("userId", "momentId")');
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "user_feedback" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "category" TEXT NOT NULL,
+        "description" TEXT NOT NULL,
+        "contact" TEXT NOT NULL DEFAULT '',
+        "screenshotUrls" TEXT[] DEFAULT ARRAY[]::TEXT[],
+        "status" TEXT NOT NULL DEFAULT 'PENDING',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "user_feedback_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "user_feedback_userId_createdAt_idx" ON "user_feedback"("userId", "createdAt")');
+    await addForeignKeyIfMissing(
+      'post_bookmarks_userId_fkey',
+      'ALTER TABLE "post_bookmarks" ADD CONSTRAINT "post_bookmarks_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+    await addForeignKeyIfMissing(
+      'post_bookmarks_postId_fkey',
+      'ALTER TABLE "post_bookmarks" ADD CONSTRAINT "post_bookmarks_postId_fkey" FOREIGN KEY ("postId") REFERENCES "posts"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+    await addForeignKeyIfMissing(
+      'moment_bookmarks_userId_fkey',
+      'ALTER TABLE "moment_bookmarks" ADD CONSTRAINT "moment_bookmarks_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+    await addForeignKeyIfMissing(
+      'moment_bookmarks_momentId_fkey',
+      'ALTER TABLE "moment_bookmarks" ADD CONSTRAINT "moment_bookmarks_momentId_fkey" FOREIGN KEY ("momentId") REFERENCES "moments"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+    await addForeignKeyIfMissing(
+      'user_feedback_userId_fkey',
+      'ALTER TABLE "user_feedback" ADD CONSTRAINT "user_feedback_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
     await addForeignKeyIfMissing(
       'moment_comments_momentId_fkey',
       'ALTER TABLE "moment_comments" ADD CONSTRAINT "moment_comments_momentId_fkey" FOREIGN KEY ("momentId") REFERENCES "moments"("id") ON DELETE CASCADE ON UPDATE CASCADE',
