@@ -48,6 +48,10 @@ jest.mock('../src/config/database', () => ({
     notification: {
       create: jest.fn(),
     },
+    postBookmark: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
   },
 }));
 
@@ -229,6 +233,7 @@ describe('CommunityService', () => {
         circle: null,
         likes: false,
       });
+      (prisma.postBookmark.findUnique as jest.Mock).mockResolvedValue(null);
 
       const post = await CommunityService.getPostById('post-1', 'user-1');
 
@@ -251,6 +256,7 @@ describe('CommunityService', () => {
         circle: null,
         likes: [{ id: 'like-1', userId: 'user-1', postId: 'post-1' }],
       });
+      (prisma.postBookmark.findUnique as jest.Mock).mockResolvedValue(null);
 
       const post = await CommunityService.getPostById('post-1', 'user-1');
       expect(post.isLiked).toBe(true);
@@ -264,6 +270,7 @@ describe('CommunityService', () => {
         circle: null,
         likes: [],
       });
+      (prisma.postBookmark.findUnique as jest.Mock).mockResolvedValue(null);
 
       const post = await CommunityService.getPostById('post-1', 'user-1');
       expect(post.isLiked).toBe(false);
@@ -307,22 +314,23 @@ describe('CommunityService', () => {
 
   describe('updatePostPrivacy', () => {
     it('should persist visibility and comment permission for the author', async () => {
-      (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
-      (prisma.post.update as jest.Mock).mockResolvedValue({
-        ...mockPost, visibility: 'PRIVATE', allowComments: false,
-      });
+      const updatedPost = { ...mockPost, visibility: 'PRIVATE', allowComments: false, author: mockUser, pet: null, circle: null };
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ ...mockPost, author: mockUser, pet: null, circle: null });
+      (prisma.post.update as jest.Mock).mockResolvedValue(updatedPost);
 
       const result = await CommunityService.updatePostPrivacy('post-1', 'user-1', 'PRIVATE', false);
 
       expect(prisma.post.update).toHaveBeenCalledWith({
         where: { id: 'post-1' },
         data: { visibility: 'PRIVATE', allowComments: false },
+        include: { author: true, pet: true, circle: true },
       });
-      expect(result).toEqual({ visibility: 'PRIVATE', allowComments: false });
+      expect(result.visibility).toBe('PRIVATE');
+      expect(result.allowComments).toBe(false);
     });
 
     it('should reject privacy changes from another user', async () => {
-      (prisma.post.findUnique as jest.Mock).mockResolvedValue(mockPost);
+      (prisma.post.findUnique as jest.Mock).mockResolvedValue({ ...mockPost, author: mockUser, pet: null, circle: null });
       await expect(CommunityService.updatePostPrivacy('post-1', 'user-2', 'PRIVATE', false))
         .rejects.toThrow('无权修改该动态');
     });

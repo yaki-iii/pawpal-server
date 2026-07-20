@@ -190,6 +190,39 @@ export class MomentService {
   }
 
   /**
+   * Get a single moment by ID with author and pet info.
+   */
+  static async getMomentById(momentId: string, userId?: string): Promise<MomentDTO> {
+    const moment = await prisma.moment.findUnique({
+      where: { id: momentId },
+      include: { user: true, pet: true },
+    });
+
+    if (!moment || (moment as { isRemoved?: boolean }).isRemoved) {
+      throw new Error('碎片不存在');
+    }
+
+    const dto = MomentService.toDTO(moment);
+    if (moment.user) dto.author = AuthService.toDTO(moment.user);
+    if (moment.pet) dto.pet = PetService.toDTO(moment.pet);
+
+    if (userId) {
+      const like = await prisma.momentLike.findUnique({
+        where: { userId_momentId: { userId, momentId } },
+      });
+      dto.isLiked = !!like;
+
+      // Inject isBookmarked from MomentBookmark
+      const bookmark = await prisma.momentBookmark.findUnique({
+        where: { userId_momentId: { userId, momentId } },
+      });
+      dto.isBookmarked = !!bookmark;
+    }
+
+    return dto;
+  }
+
+  /**
    * Delete a moment. Verifies ownership.
    */
   static async deleteMoment(momentId: string, userId: string): Promise<void> {

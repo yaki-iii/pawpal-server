@@ -25,6 +25,8 @@ export class CommunityService {
       petId?: string;
       images?: string[];
       tags?: string[];
+      visibility?: string;
+      allowComments?: boolean;
     },
   ): Promise<PostDTO> {
     const title = CommunityService.postDisplayTitle(data.title, data.content);
@@ -37,6 +39,8 @@ export class CommunityService {
         content: data.content,
         images: data.images || [],
         tags: data.tags || [],
+        visibility: data.visibility || 'PUBLIC',
+        allowComments: data.allowComments ?? true,
       },
       include: {
         author: true,
@@ -111,6 +115,15 @@ export class CommunityService {
     if (post.circle) {
       dto.circle = CommunityService.toCircleDTO(post.circle);
     }
+
+    // Inject isBookmarked from postBookmark table
+    if (userId) {
+      const bookmark = await prisma.postBookmark.findUnique({
+        where: { userId_postId: { userId, postId } },
+      });
+      dto.isBookmarked = !!bookmark;
+    }
+
     return dto;
   }
 
@@ -143,15 +156,23 @@ export class CommunityService {
     userId: string,
     visibility: 'PUBLIC' | 'FOLLOWERS' | 'PRIVATE',
     allowComments: boolean,
-  ): Promise<{ visibility: string; allowComments: boolean }> {
-    const post = await prisma.post.findUnique({ where: { id: postId } });
+  ): Promise<PostDTO> {
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      include: { author: true, pet: true, circle: true },
+    });
     if (!post || post.isRemoved) throw new Error('动态不存在');
     if (post.userId !== userId) throw new Error('无权修改该动态');
     const updated = await prisma.post.update({
       where: { id: postId },
       data: { visibility, allowComments },
+      include: { author: true, pet: true, circle: true },
     });
-    return { visibility: updated.visibility, allowComments: updated.allowComments };
+    const dto = CommunityService.toPostDTO(updated);
+    if (updated.author) dto.author = AuthService.toDTO(updated.author);
+    if (updated.pet) dto.pet = PetService.toDTO(updated.pet);
+    if (updated.circle) dto.circle = CommunityService.toCircleDTO(updated.circle);
+    return dto;
   }
 
   /**
@@ -348,6 +369,16 @@ export class CommunityService {
         dto.isJoined = memberMap.has(dto.id);
         dto.myRole = memberMap.get(dto.id) ?? undefined;
       });
+
+      // Batch inject isBookmarked (avoid N+1)
+      const bookmarks = await prisma.circleBookmark.findMany({
+        where: { userId, circleId: { in: dtos.map((d) => d.id) } },
+        select: { circleId: true },
+      });
+      const bookmarkedIds = new Set(bookmarks.map((b) => b.circleId));
+      dtos.forEach((dto) => {
+        dto.isBookmarked = bookmarkedIds.has(dto.id);
+      });
     }
 
     return dtos;
@@ -369,6 +400,12 @@ export class CommunityService {
       });
       dto.isJoined = !!membership && membership.status === 'ACTIVE';
       dto.myRole = membership?.role;
+
+      // Inject isBookmarked
+      const bookmark = await prisma.circleBookmark.findUnique({
+        where: { userId_circleId: { userId, circleId: id } },
+      });
+      dto.isBookmarked = !!bookmark;
     }
 
     return dto;
@@ -479,6 +516,30 @@ export class CommunityService {
     dto.isJoined = true;
     dto.myRole = 'OWNER';
     return dto;
+  }
+
+  // ---- Circle Bookmarks ----
+
+  /**
+   * Toggle bookmark on a circle.
+   */
+  static async toggleCircleBookmark(userId: string, circleId: string): Promise<{ bookmarked: boolean }> {
+    const circle = await prisma.circle.findUnique({ where: { id: circleId } });
+    if (!circle || (circle as { isRemoved?: boolean }).isRemoved) {
+      throw new Error('圈子不存在');
+    }
+
+    const existing = await prisma.circleBookmark.findUnique({
+      where: { userId_circleId: { userId, circleId } },
+    });
+
+    if (existing) {
+      await prisma.circleBookmark.delete({ where: { id: existing.id } });
+      return { bookmarked: false };
+    }
+
+    await prisma.circleBookmark.create({ data: { userId, circleId } });
+    return { bookmarked: true };
   }
 
   // ---- Follows ----
@@ -606,7 +667,7 @@ export class CommunityService {
 
   // ---- DTO Converters ----
 
-  static toPostDTO(post: Post & { isLiked?: boolean }): PostDTO {
+  static toPostDTO(post: Post & { isLiked?: boolean; isBookmarked?: boolean }): PostDTO {
     return {
       id: post.id,
       userId: post.userId,
@@ -623,6 +684,7 @@ export class CommunityService {
       createdAt: post.createdAt.toISOString(),
       updatedAt: post.updatedAt.toISOString(),
       isLiked: (post as { isLiked?: boolean }).isLiked,
+      isBookmarked: (post as { isBookmarked?: boolean }).isBookmarked,
       isPinned: (post as { isPinned?: boolean }).isPinned,
       isRemoved: (post as { isRemoved?: boolean }).isRemoved,
     };

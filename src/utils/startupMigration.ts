@@ -211,6 +211,16 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "moment_bookmarks_userId_momentId_key" ON "moment_bookmarks"("userId", "momentId")');
     await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "circle_bookmarks" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "circleId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "circle_bookmarks_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "circle_bookmarks_userId_circleId_key" ON "circle_bookmarks"("userId", "circleId")');
+    await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "user_feedback" (
         "id" TEXT NOT NULL,
         "userId" TEXT NOT NULL,
@@ -240,6 +250,14 @@ export async function runStartupMigrations(): Promise<void> {
     await addForeignKeyIfMissing(
       'moment_bookmarks_momentId_fkey',
       'ALTER TABLE "moment_bookmarks" ADD CONSTRAINT "moment_bookmarks_momentId_fkey" FOREIGN KEY ("momentId") REFERENCES "moments"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+    await addForeignKeyIfMissing(
+      'circle_bookmarks_userId_fkey',
+      'ALTER TABLE "circle_bookmarks" ADD CONSTRAINT "circle_bookmarks_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE',
+    );
+    await addForeignKeyIfMissing(
+      'circle_bookmarks_circleId_fkey',
+      'ALTER TABLE "circle_bookmarks" ADD CONSTRAINT "circle_bookmarks_circleId_fkey" FOREIGN KEY ("circleId") REFERENCES "circles"("id") ON DELETE CASCADE ON UPDATE CASCADE',
     );
     await addForeignKeyIfMissing(
       'user_feedback_userId_fkey',

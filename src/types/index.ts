@@ -108,6 +108,7 @@ export interface PostDTO {
   pet?: PetDTO | null;
   circle?: CircleDTO | null;
   isLiked?: boolean;
+  isBookmarked?: boolean;
   isPinned?: boolean;
   isRemoved?: boolean;
 }
@@ -133,6 +134,7 @@ export interface CircleDTO {
   createdAt: string;
   isJoined?: boolean;
   myRole?: string;
+  isBookmarked?: boolean;
 }
 
 export interface CommentDTO {
@@ -211,6 +213,7 @@ export interface MomentDTO {
   author?: UserDTO;
   pet?: PetDTO | null;
   isLiked?: boolean;
+  isBookmarked?: boolean;
 }
 
 export interface EmergencyHelpDTO {

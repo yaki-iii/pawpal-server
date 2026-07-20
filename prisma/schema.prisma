@@ -166,6 +166,7 @@ model User {
   likes               Like[]
   postBookmarks       PostBookmark[]
   momentBookmarks     MomentBookmark[]
+  circleBookmarks     CircleBookmark[]
   followings          Follow[]        @relation("Follower")
   followers           Follow[]        @relation("Followee")
   circleMembers       CircleMember[]
@@ -403,6 +404,7 @@ model Circle {
   bans           CircleBan[]
   joinRequests   CircleJoinRequest[]
   userWarnings   UserWarning[]
+  bookmarks      CircleBookmark[]
 
   @@index([type, species])
   @@index([visibility])
@@ -618,6 +620,17 @@ model MomentBookmark {
   moment Moment @relation(fields: [momentId], references: [id], onDelete: Cascade)
   @@unique([userId, momentId])
   @@map("moment_bookmarks")
+}
+
+model CircleBookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  circleId  String
+  createdAt DateTime @default(now())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  circle Circle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  @@unique([userId, circleId])
+  @@map("circle_bookmarks")
 }
 
 model MomentComment {

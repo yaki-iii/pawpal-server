@@ -17,6 +17,13 @@ jest.mock('../src/config/database', () => ({
       create: jest.fn(),
       delete: jest.fn(),
     },
+    circleBookmark: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+    },
+    circle: { findUnique: jest.fn() },
     like: { findMany: jest.fn() },
     follow: { findMany: jest.fn() },
   },
@@ -191,6 +198,7 @@ describe('ProfileContentService', () => {
         },
       },
     ]);
+    (prisma.circleBookmark.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.momentBookmark.findMany as jest.Mock).mockResolvedValue([
       {
         id: 'moment-like-1',
@@ -223,7 +231,7 @@ describe('ProfileContentService', () => {
     const knowledge = await ProfileContentService.listFavorites('user-1', 'knowledge', 20);
 
     expect(all.items.map((item) => item.type)).toEqual(['moment', 'post']);
-    expect(all.counts).toEqual({ all: 2, post: 1, moment: 1, knowledge: 0, vet: 0 });
+    expect(all.counts).toEqual({ all: 2, post: 1, moment: 1, circle: 0, knowledge: 0, vet: 0 });
     expect(moments.items).toEqual([
       expect.objectContaining({ id: 'moment-1', type: 'moment' }),
     ]);

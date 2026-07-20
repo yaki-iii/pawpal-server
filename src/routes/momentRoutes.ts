@@ -52,6 +52,9 @@ const momentPrivacySchema = z.object({
   allowComments: z.boolean(),
 });
 
+// GET /moments/:id — public (optional auth for like/bookmark status)
+momentRoutes.get('/:id', optionalAuth, MomentController.getMomentById);
+
 // DELETE /moments/:id — auth required (owner only)
 momentRoutes.delete('/:id', requireAuth, MomentController.deleteMoment);
 

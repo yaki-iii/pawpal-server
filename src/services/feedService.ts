@@ -86,6 +86,19 @@ export class FeedService {
       items.forEach((p) => {
         p.isLiked = likedPostIds.has(p.id);
       });
+
+      // Add bookmark status
+      const bookmarks = await prisma.postBookmark.findMany({
+        where: {
+          userId,
+          postId: { in: items.map((p) => p.id) },
+        },
+        select: { postId: true },
+      });
+      const bookmarkedPostIds = new Set(bookmarks.map((b) => b.postId));
+      items.forEach((p) => {
+        p.isBookmarked = bookmarkedPostIds.has(p.id);
+      });
     }
 
     return {
@@ -137,6 +150,19 @@ export class FeedService {
       const likedPostIds = new Set(likes.map((l) => l.postId));
       items.forEach((p) => {
         p.isLiked = likedPostIds.has(p.id);
+      });
+
+      // Add bookmark status
+      const bookmarks = await prisma.postBookmark.findMany({
+        where: {
+          userId,
+          postId: { in: items.map((p) => p.id) },
+        },
+        select: { postId: true },
+      });
+      const bookmarkedPostIds = new Set(bookmarks.map((b) => b.postId));
+      items.forEach((p) => {
+        p.isBookmarked = bookmarkedPostIds.has(p.id);
       });
     }
 

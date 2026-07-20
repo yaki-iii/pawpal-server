@@ -118,6 +118,23 @@ export class MomentController {
   }
 
   /**
+   * GET /moments/:id
+   */
+  static async getMomentById(req: Request, res: Response): Promise<void> {
+    try {
+      const moment = await MomentService.getMomentById(req.params.id, req.userId);
+      sendSuccess(res, moment);
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message.includes('不存在')) {
+        sendError(res, 404, message, undefined, 404);
+      } else {
+        sendError(res, 500, message);
+      }
+    }
+  }
+
+  /**
    * DELETE /moments/:id
    */
   static async deleteMoment(req: Request, res: Response): Promise<void> {

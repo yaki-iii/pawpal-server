@@ -13,6 +13,9 @@ jest.mock('../src/config/database', () => ({
     like: {
       findMany: jest.fn(),
     },
+    postBookmark: {
+      findMany: jest.fn(),
+    },
   },
 }));
 
@@ -68,6 +71,7 @@ describe('FeedService', () => {
     jest.clearAllMocks();
     // Default mock: no likes by any user
     (prisma.like.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.postBookmark.findMany as jest.Mock).mockResolvedValue([]);
   });
 
   describe('getFeed - LATEST', () => {

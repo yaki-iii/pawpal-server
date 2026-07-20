@@ -210,8 +210,8 @@ export class UserController {
       }
 
       const { type = 'all', limit = '20' } = req.query;
-      const normalizedType = ['all', 'post', 'moment', 'knowledge', 'vet'].includes(String(type))
-        ? String(type) as 'all' | 'post' | 'moment' | 'knowledge' | 'vet'
+      const normalizedType = ['all', 'post', 'moment', 'circle', 'knowledge', 'vet'].includes(String(type))
+        ? String(type) as 'all' | 'post' | 'moment' | 'circle' | 'knowledge' | 'vet'
         : 'all';
 
       const favorites = await ProfileContentService.listFavorites(

@@ -13,6 +13,8 @@ const postSchema = z.object({
   petId: z.string().optional(),
   images: z.array(z.string()).max(9, '最多9张图片').default([]),
   tags: z.array(z.string()).max(5, '最多5个标签').default([]),
+  visibility: z.enum(['PUBLIC', 'FOLLOWERS', 'PRIVATE']).default('PUBLIC'),
+  allowComments: z.boolean().default(true),
 });
 
 const commentSchema = z.object({
@@ -110,6 +112,9 @@ circleRoutes.get('/:id/members', CircleModerationController.listMembers);
 // Circle membership — auth required
 circleRoutes.post('/:id/join', requireAuth, CommunityController.joinCircle);
 circleRoutes.post('/:id/leave', requireAuth, CommunityController.leaveCircle);
+
+// Circle bookmark — auth required
+circleRoutes.post('/:id/bookmark', requireAuth, CommunityController.toggleCircleBookmark);
 
 // Join requests (RESTRICTED / PRIVATE circles)
 circleRoutes.post('/:id/join-request', requireAuth, validateBody(joinRequestSchema), CircleModerationController.submitJoinRequest);

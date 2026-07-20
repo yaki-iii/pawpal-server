@@ -279,4 +279,20 @@ export class CommunityController {
       sendError(res, 400, (error as Error).message || '创建失败');
     }
   }
+
+  /**
+   * POST /circles/:id/bookmark — toggle circle bookmark
+   */
+  static async toggleCircleBookmark(req: Request, res: Response): Promise<void> {
+    try {
+      if (!req.userId) {
+        sendError(res, 401, '未授权');
+        return;
+      }
+      const result = await CommunityService.toggleCircleBookmark(req.userId, req.params.id);
+      sendSuccess(res, result);
+    } catch (error) {
+      sendError(res, 400, (error as Error).message || '收藏失败');
+    }
+  }
 }

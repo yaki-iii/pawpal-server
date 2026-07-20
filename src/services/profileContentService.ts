@@ -5,7 +5,7 @@ import { CommunityService } from './communityService';
 import { MomentService } from './momentService';
 import { PetService } from './petService';
 
-export type FavoriteContentType = 'all' | 'post' | 'moment' | 'knowledge' | 'vet';
+export type FavoriteContentType = 'all' | 'post' | 'moment' | 'circle' | 'knowledge' | 'vet';
 
 export interface FavoriteContentItemDTO {
   id: string;
@@ -14,7 +14,7 @@ export interface FavoriteContentItemDTO {
   title: string;
   subtitle: string;
   imageUrls: string[];
-  payload: PostDTO | MomentDTO | null;
+  payload: PostDTO | MomentDTO | import('../types').CircleDTO | null;
 }
 
 export interface FavoriteContentResultDTO {
@@ -96,7 +96,7 @@ export class ProfileContentService {
 
     return likes.map((like) => {
       const post = like.post;
-      const dto = CommunityService.toPostDTO({ ...post, isLiked: true });
+      const dto = CommunityService.toPostDTO({ ...post, isLiked: true, isBookmarked: false });
       if (post.author) dto.author = AuthService.toDTO(post.author as never);
       if (post.pet) dto.pet = PetService.toDTO(post.pet as never);
       if (post.circle) dto.circle = CommunityService.toCircleDTO(post.circle as never);
@@ -109,23 +109,27 @@ export class ProfileContentService {
     type: FavoriteContentType = 'all',
     limit: number = 20,
   ): Promise<FavoriteContentResultDTO> {
-    const [posts, moments] = await Promise.all([
+    const [posts, moments, circles] = await Promise.all([
       type === 'all' || type === 'post'
         ? ProfileContentService.listFavoritePosts(userId, limit)
         : Promise.resolve([]),
       type === 'all' || type === 'moment'
         ? ProfileContentService.listFavoriteMoments(userId, limit)
         : Promise.resolve([]),
+      type === 'all' || type === 'circle'
+        ? ProfileContentService.listFavoriteCircles(userId, limit)
+        : Promise.resolve([]),
     ]);
 
-    const allItems = [...posts, ...moments].sort(
+    const allItems = [...posts, ...moments, ...circles].sort(
       (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime(),
     );
 
     const counts: Record<FavoriteContentType, number> = {
-      all: posts.length + moments.length,
+      all: posts.length + moments.length + circles.length,
       post: posts.length,
       moment: moments.length,
+      circle: circles.length,
       knowledge: 0,
       vet: 0,
     };
@@ -157,7 +161,7 @@ export class ProfileContentService {
 
     return bookmarks.map((bookmark) => {
       const post = bookmark.post;
-      const dto = CommunityService.toPostDTO(post);
+      const dto = CommunityService.toPostDTO({ ...post, isBookmarked: true });
       if (post.author) dto.author = AuthService.toDTO(post.author as never);
       if (post.pet) dto.pet = PetService.toDTO(post.pet as never);
       if (post.circle) dto.circle = CommunityService.toCircleDTO(post.circle as never);
@@ -200,6 +204,34 @@ export class ProfileContentService {
         title: moment.content.slice(0, 18) || '日常碎片',
         subtitle: moment.content,
         imageUrls: moment.images,
+        payload: dto,
+      };
+    });
+  }
+
+  private static async listFavoriteCircles(
+    userId: string,
+    limit: number,
+  ): Promise<FavoriteContentItemDTO[]> {
+    const bookmarks = await prisma.circleBookmark.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        circle: true,
+      },
+    });
+
+    return bookmarks.map((bookmark) => {
+      const circle = bookmark.circle;
+      const dto = CommunityService.toCircleDTO(circle);
+      return {
+        id: circle.id,
+        type: 'circle',
+        savedAt: bookmark.createdAt.toISOString(),
+        title: circle.name || '圈子',
+        subtitle: circle.description,
+        imageUrls: circle.coverImage ? [circle.coverImage] : [],
         payload: dto,
       };
     });
